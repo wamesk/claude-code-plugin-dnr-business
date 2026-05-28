@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WAME DNR Plan",
+  "description": "Strukturovany plan Detailneho navrhu riesenia, ktory sa po validacii renderuje do .docx pomocou dnr_to_docx.py.",
+  "type": "object",
+  "required": [
+    "meta",
+    "uvod",
+    "vychodiskovy_stav",
+    "ciele",
+    "popis_riesenia",
+    "pouzivatelske_roly",
+    "technicke_riesenie",
+    "gdpr",
+    "podklady_klienta",
+    "fazy",
+    "rizika",
+    "podmienky",
+    "schvalenie"
+  ],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["title", "client", "date", "version", "language"],
+      "properties": {
+        "title": {"type": "string"},
+        "client": {
+          "type": "object",
+          "required": ["company"],
+          "properties": {
+            "company": {"type": "string"},
+            "contact_name": {"type": "string"},
+            "contact_email": {"type": "string"},
+            "contact_phone": {"type": "string"}
+          }
+        },
+        "project_type": {"type": "string", "enum": ["web", "eshop", "system", "app", "mixed"]},
+        "date": {"type": "string", "description": "ISO 8601 date, e.g. 2026-05-28"},
+        "version": {"type": "string", "default": "v1.0"},
+        "language": {"type": "string", "enum": ["sk", "cs", "en"]},
+        "prepared_by": {"type": "string", "default": "WAME s.r.o."}
+      }
+    },
+    "uvod": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": {"type": "string", "description": "Co je DNR, na co sluzi, co sa od klienta ocakava (schvalenie)."}
+      }
+    },
+    "vychodiskovy_stav": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": {"type": "string"},
+        "co_zostava": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "ciele": {
+      "type": "object",
+      "required": ["biznis", "technicke", "out_of_scope"],
+      "properties": {
+        "biznis": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "technicke": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "out_of_scope": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+      }
+    },
+    "popis_riesenia": {
+      "type": "object",
+      "required": ["uvod", "moduly"],
+      "properties": {
+        "uvod": {"type": "string", "description": "Celkova architektura riesenia, vysvetlena laicky."},
+        "moduly": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["nazov", "popis", "funkcie"],
+            "properties": {
+              "nazov": {"type": "string"},
+              "popis": {"type": "string", "description": "Co robi a preco je dolezity pre biznis klienta."},
+              "funkcie": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+              "priklady": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        },
+        "sitemap": {"type": "array", "items": {"type": "string"}},
+        "user_flows": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "pouzivatelske_roly": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["rola", "kto", "opravnenia"],
+        "properties": {
+          "rola": {"type": "string"},
+          "kto": {"type": "string"},
+          "opravnenia": {"type": "string"}
+        }
+      }
+    },
+    "technicke_riesenie": {
+      "type": "object",
+      "required": ["platforma", "integracie", "bezpecnost"],
+      "properties": {
+        "platforma": {
+          "type": "object",
+          "properties": {
+            "backend": {"type": "string"},
+            "frontend": {"type": "string"},
+            "databaza": {"type": "string"},
+            "hosting": {"type": "string"},
+            "mobilna_app": {"type": "string"},
+            "zdovodnenie": {"type": "string", "description": "Preco prave tieto technologie — biznis prinos."}
+          }
+        },
+        "integracie": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["system", "ucel", "smer_dat"],
+            "properties": {
+              "system": {"type": "string"},
+              "ucel": {"type": "string"},
+              "smer_dat": {"type": "string"},
+              "poznamka": {"type": "string"}
+            }
+          }
+        },
+        "bezpecnost": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+      }
+    },
+    "gdpr": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": {"type": "string"},
+        "osobne_udaje": {"type": "array", "items": {"type": "string"}},
+        "doba_uchovavania": {"type": "string"},
+        "cookies": {"type": "string"}
+      }
+    },
+    "podklady_klienta": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["podklad", "format", "termin", "stav"],
+        "properties": {
+          "podklad": {"type": "string"},
+          "format": {"type": "string"},
+          "termin": {"type": "string"},
+          "stav": {"type": "string", "enum": ["dodane", "v_priprave", "chybajuce"]}
+        }
+      }
+    },
+    "fazy": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["nazov", "popis", "vystupy", "trvanie", "zodpovednost", "platobny_milnik"],
+        "properties": {
+          "nazov": {"type": "string"},
+          "popis": {"type": "string"},
+          "vystupy": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+          "trvanie": {"type": "string"},
+          "zodpovednost": {
+            "type": "object",
+            "properties": {
+              "wame": {"type": "array", "items": {"type": "string"}},
+              "klient": {"type": "array", "items": {"type": "string"}}
+            }
+          },
+          "platobny_milnik": {"type": "string"}
+        }
+      }
+    },
+    "rizika": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["riziko", "dopad", "pravdepodobnost", "prevencia"],
+        "properties": {
+          "riziko": {"type": "string"},
+          "dopad": {"type": "string", "enum": ["nizky", "stredny", "vysoky"]},
+          "pravdepodobnost": {"type": "string", "enum": ["nizka", "stredna", "vysoka"]},
+          "prevencia": {"type": "string"}
+        }
+      }
+    },
+    "podmienky": {
+      "type": "object",
+      "required": ["wame_zavazky", "klient_zavazky"],
+      "properties": {
+        "wame_zavazky": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "klient_zavazky": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "zmeny_scope": {"type": "string"}
+      }
+    },
+    "schvalenie": {
+      "type": "object",
+      "required": ["datum"],
+      "properties": {
+        "datum": {"type": "string"},
+        "za_klienta": {"type": "string"},
+        "za_wame": {"type": "string"}
+      }
+    },
+    "volitelne": {
+      "type": "object",
+      "description": "Volitelne sekcie A-E, len ak je relevantne.",
+      "properties": {
+        "wireframy": {"type": "string"},
+        "datovy_model": {"type": "string"},
+        "seo": {"type": "string"},
+        "migracia": {"type": "string"},
+        "skolenie": {"type": "string"}
+      }
+    }
+  }
+}

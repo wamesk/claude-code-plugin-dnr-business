@@ -1,0 +1,25 @@
+{
+  "output_dir": "docs",
+  "language": "auto",
+  "default_version": "v1.0",
+  "client": {
+    "company": "",
+    "contact_name": "",
+    "contact_email": "",
+    "contact_phone": ""
+  },
+  "defaults": {
+    "project_type": "web",
+    "prepared_by": "WAME s.r.o.",
+    "wame_zavazky": [
+      "Dodanie všetkých výstupov v rozsahu DNR.",
+      "Reakcia na e-mailovú komunikáciu do 24h v pracovných dňoch.",
+      "Týždenné statusy počas implementačnej fázy."
+    ],
+    "klient_zavazky": [
+      "Dodanie podkladov podľa harmonogramu.",
+      "Schválenie výstupov do 5 pracovných dní od doručenia.",
+      "Určenie zástupcu so schvaľovacími právomocami."
+    ]
+  }
+}
