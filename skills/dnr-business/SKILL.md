@@ -157,6 +157,62 @@ Ak vráti chyby, oprav JSON a skús znova (max 3 pokusy). Typické chyby:
 - `rizika` má < 5 položiek → doplň aspoň 5,
 - nesprávny enum (`stav`, `dopad`, `pravdepodobnost`) → použi povolené hodnoty.
 
+### Step 7.5 — Vizuály: obrázky a wireframe placeholdery
+
+Pre každý modul v `popis_riesenia.moduly` rozhodni, či má dostať **obrázok**:
+
+**Ak vo vstupoch (Step 4) sú obrázky/screenshoty** (PNG/JPG priložené v podklade
+alebo extrahované z `.docx`):
+
+1. Skontroluj priečinok podkladov aj `media/` priečinok rozbaleného `.docx`
+   (cez `unzip -l <file>.docx | grep -i media`). Obrázky vyextrahuj cez:
+   ```bash
+   unzip -j -o <input>.docx 'word/media/*' -d /tmp/dnr_images/
+   ```
+2. Pre každý obrázok rozhodni, **ku ktorému modulu / sekcii sa hodí** (názov
+   súboru, kontext v okolitom texte, OCR ak treba).
+3. V JSON pláne pridaj k modulu pole `obrazok` (absolútna cesta) a voliteľne
+   `obrazok_popis` (popisok pod obrázok).
+   ```json
+   {
+     "nazov": "Marketingové súhlasy",
+     "popis": "...",
+     "obrazok": "/tmp/dnr_images/image3.png",
+     "obrazok_popis": "Obrazovka súhlasov v admin paneli"
+   }
+   ```
+
+**Ak obrázky nie sú dostupné, ale wireframe by bol vhodný** (typicky pre nové
+UI obrazovky, nové user flows, dôležité formuláre), pridaj `wireframe` blok
+namiesto `obrazok`:
+
+```json
+{
+  "nazov": "Prihlásenie cez OTP",
+  "popis": "...",
+  "wireframe": {
+    "title": "Obrazovka zadania OTP kódu",
+    "description": "Wireframe ukáže layout obrazovky, kde používateľ zadáva 6-miestny OTP kód doručený SMS.",
+    "checklist": [
+      "Pole pre 6-miestny OTP kód (oddelené boxy alebo jedno pole)",
+      "Tlačidlo 'Overiť kód' (primárne)",
+      "Odkaz 'Poslať znova' s 60s odpočtom",
+      "Indikátor zostávajúceho času platnosti kódu",
+      "Tlačidlo 'Späť' k zadávaniu čísla"
+    ]
+  }
+}
+```
+
+Skript ho vyrenderuje ako **zvýraznený blok so zelenou ľavou hranou** —
+vizuálne odlíšený od bežného textu, aby bolo jasné, že tam má prísť reálny
+wireframe.
+
+**Kedy pridať wireframe placeholder:** ak modul popisuje obrazovku/UI/flow,
+ktorý nie je triviálny (login formulár nie, viacstupňový wizard áno). Ak je
+modul čisto backendový (cron, API endpoint, integrácia), placeholder
+nepridávaj.
+
 ### Step 8 — Potvrdenie pred zápisom
 
 Ukáž používateľovi kompaktný súhrn:
@@ -253,6 +309,25 @@ Vytvoríš cez `/dnr-business --init`. Kľúčové polia:
 - Tón: odborný, ľudský, sebavedomý — bez buzzwordov.
 - Diakritiku zachovávaj — žiadne ASCII náhrady.
 - `verzia` začína `v1.0`, pri zásadnej revízii bump na `v1.1` / `v2.0`.
+
+## Číslované vs. odrážkové zoznamy
+
+Skript automaticky **čísluje** (1., 2., 3.) tieto zoznamy:
+
+- `ciele.biznis`, `ciele.technicke`, `ciele.out_of_scope`
+- `popis_riesenia.moduly[].funkcie`, `sitemap`, `user_flows`
+- `fazy[].vystupy`
+
+Tieto zoznamy sú **odrážkové** (●):
+
+- `vychodiskovy_stav.co_zostava`
+- `popis_riesenia.moduly[].priklady`
+- `technicke_riesenie.bezpecnost`, `gdpr.osobne_udaje`
+- `podmienky.wame_zavazky`, `podmienky.klient_zavazky`
+- `fazy[].zodpovednost.{wame,klient}`
+
+Heuristika: **enumerable kroky/výstupy** (kde poradie alebo počet má váhu)
+sú číslované, **kvalitatívne popisy** sú s odrážkami.
 
 ## Súvisiace skilly
 

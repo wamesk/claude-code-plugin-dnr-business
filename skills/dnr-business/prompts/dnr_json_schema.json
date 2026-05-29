@@ -38,7 +38,9 @@
         "date": {"type": "string", "description": "ISO 8601 date, e.g. 2026-05-28"},
         "version": {"type": "string", "default": "v1.0"},
         "language": {"type": "string", "enum": ["sk", "cs", "en"]},
-        "prepared_by": {"type": "string", "default": "WAME s.r.o."}
+        "prepared_by": {"type": "string", "default": "WAME s.r.o."},
+        "subtitle": {"type": "string", "description": "Krátky kontext pod hlavným nadpisom na titulnej strane."},
+        "confidentiality": {"type": "string", "description": "Text vpravo v hlavičke (default: 'Dôverné — pre interné použitie [Klient] a WAME')."}
       }
     },
     "uvod": {
@@ -80,7 +82,18 @@
               "nazov": {"type": "string"},
               "popis": {"type": "string", "description": "Co robi a preco je dolezity pre biznis klienta."},
               "funkcie": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-              "priklady": {"type": "array", "items": {"type": "string"}}
+              "priklady": {"type": "array", "items": {"type": "string"}},
+              "obrazok": {"type": "string", "description": "Cesta k súboru obrázka/screenshotu (PNG/JPG) z podkladov klienta — bude vložený pod popis modulu."},
+              "obrazok_popis": {"type": "string", "description": "Popisok pod obrázok."},
+              "wireframe": {
+                "type": "object",
+                "description": "Použiť LEN ak obrázok nie je k dispozícii a wireframe by bol vhodný — vykreslí sa zvýraznený blok 'na doplnenie'.",
+                "properties": {
+                  "title": {"type": "string"},
+                  "description": {"type": "string"},
+                  "checklist": {"type": "array", "items": {"type": "string"}}
+                }
+              }
             }
           }
         },
@@ -206,8 +219,12 @@
       "required": ["datum"],
       "properties": {
         "datum": {"type": "string"},
-        "za_klienta": {"type": "string"},
-        "za_wame": {"type": "string"}
+        "za_klienta": {
+          "description": "String (meno) alebo objekt {meno, funkcia, datum} pre tabuľku Pole/Hodnota."
+        },
+        "za_wame": {
+          "description": "String (meno) alebo objekt {meno, funkcia, datum} pre tabuľku Pole/Hodnota."
+        }
       }
     },
     "volitelne": {
