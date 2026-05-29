@@ -54,9 +54,9 @@ WAME_TEXT = "222222"          # body text
 WAME_MUTED = "555555"         # secondary — header/footer, meta labels
 WAME_SUBTITLE = "2A3556"      # title page subtitle ("Detailný návrh riešenia" / context line)
 WAME_TABLE_BORDER = "E5E7EB"  # subtle cell borders inside tables
-WAME_LIGHT = "F4F5F8"
-WAME_FONT = "Inter"
-WAME_FONT_FALLBACK = "Calibri"
+WAME_LIGHT = "EAEEF4"
+WAME_FONT = "Calibri"
+WAME_FONT_FALLBACK = "Carlito"
 
 
 # ---------------------------------------------------------------------------
@@ -336,10 +336,10 @@ def _para(text: str, *, style: Optional[str] = None, bold: bool = False,
     )
 
 
-def _body_para(text: str, *, justify: bool = True) -> str:
-    """Standard body paragraph: Inter 11pt, color #222, justify both, line 320."""
+def _body_para(text: str, *, justify: bool = False) -> str:
+    """Standard body paragraph: Inter 10.5pt, color #222, left-aligned, line 312 (1.43x)."""
     return _para(
-        text, color=WAME_TEXT, size=11, line=320,
+        text, color=WAME_TEXT, size=11, line=312,
         align="both" if justify else None,
     )
 
@@ -390,25 +390,22 @@ def _render_list(items: List[Any], numbered: bool = False) -> List[str]:
     return out
 
 
-def _wireframe_placeholder(title: str, description: str,
-                           checklist: Optional[List[str]] = None) -> str:
-    """Highlighted block describing what a missing wireframe/diagram should contain.
+def _callout(title: str, body_paragraphs: List[str], *,
+             icon: Optional[str] = None) -> str:
+    """Light-fill callout box with a thick green left border.
 
-    Rendered as a single-cell table with green left border and light fill — visually
-    distinct from regular content so it's obvious a real wireframe should replace it.
+    Used for highlighted notes ("Bez schváleného DNR sa nepokračuje", "Spravovanie verzií", …)
+    and for wireframe placeholders. Title is bold navy. `body_paragraphs` is a list of
+    already-rendered <w:p> XML strings so the caller can mix paragraphs, bullets and lists.
     """
     inner: List[str] = []
-    inner.append(_para(
-        f"📐 Wireframe (na doplnenie): {title}",
-        bold=True, color=WAME_NAVY, size=11, font=WAME_FONT, space_after=120,
-    ))
-    inner.append(_para(description, color=WAME_TEXT, size=10, font=WAME_FONT,
-                       align="both", line=300, space_after=120))
-    if checklist:
-        inner.append(_para("Wireframe by mal zobrazovať:",
-                           bold=True, color=WAME_MUTED, size=9, font=WAME_FONT,
-                           space_after=60))
-        inner.extend(_bullet(item) for item in checklist)
+    label = f"{icon} {title}" if icon else title
+    inner.append(_para(label, bold=True, color=WAME_NAVY, size=11, font=WAME_FONT,
+                       space_after=120))
+    inner.extend(body_paragraphs)
+    if not body_paragraphs:
+        # Ensure at least one paragraph inside the cell so Word renders it cleanly.
+        inner.append(_para("", space_after=0))
 
     cell_pr = (
         '<w:tcW w:type="dxa" w:w="9026"/>'
@@ -441,6 +438,21 @@ def _wireframe_placeholder(title: str, description: str,
         f"{''.join(inner)}</w:tc></w:tr></w:tbl>"
         + _para("", space_after=120)
     )
+
+
+def _wireframe_placeholder(title: str, description: str,
+                           checklist: Optional[List[str]] = None) -> str:
+    """Highlighted block describing what a missing wireframe should contain."""
+    body: List[str] = []
+    if description:
+        body.append(_para(description, color=WAME_TEXT, size=10, font=WAME_FONT,
+                          align="both", line=300, space_after=120))
+    if checklist:
+        body.append(_para("Wireframe by mal zobrazovať:",
+                          bold=True, color=WAME_MUTED, size=9, font=WAME_FONT,
+                          space_after=60))
+        body.extend(_bullet(item) for item in checklist)
+    return _callout(f"Wireframe (na doplnenie): {title}", body, icon="📐")
 
 
 def _image_paragraph(rel_id: str, width_emu: int, height_emu: int,
@@ -489,11 +501,14 @@ def _spacer() -> str:
 
 def _table(rows: List[List[str]], *, header: bool = True,
            col_widths: Optional[List[int]] = None) -> str:
-    """Build a <w:tbl> with WAME styling matching the sample DNR.
+    """Build a <w:tbl> using the WameTable style + explicit banded shading.
 
-    - Header row: navy #091145 fill, white bold size 20, vAlign center, repeats on page break.
-    - Borders: subtle #E5E7EB cell borders, light outer.
-    - Widths in twentieths of a point (twips).
+    Strategy:
+      • The WameTable style declares firstRow + band1Horz conditional formatting,
+        so manually-added rows in Word inherit the next band automatically.
+      • Existing rows ALSO get inline <w:shd> matching the band1Horz fill, so the
+        banding shows even in readers that don't render custom table styles
+        (older LibreOffice, Google Docs).
     """
     if not rows:
         return ""
@@ -501,17 +516,13 @@ def _table(rows: List[List[str]], *, header: bool = True,
     if col_widths is None:
         col_widths = [9026 // n_cols] * n_cols
     grid = "".join(f'<w:gridCol w:w="{w}"/>' for w in col_widths)
+    first_row_flag = "1" if header else "0"
     tbl_pr = (
         "<w:tblPr>"
+        '<w:tblStyle w:val="WameTable"/>'
         '<w:tblW w:type="dxa" w:w="9026"/>'
-        '<w:tblBorders>'
-        '<w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/>'
-        '<w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/>'
-        '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/>'
-        '<w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/>'
-        '<w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/>'
-        '<w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/>'
-        "</w:tblBorders>"
+        f'<w:tblLook w:val="04A0" w:firstRow="{first_row_flag}" w:lastRow="0" '
+        'w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>'
         "</w:tblPr>"
         f"<w:tblGrid>{grid}</w:tblGrid>"
     )
@@ -519,32 +530,30 @@ def _table(rows: List[List[str]], *, header: bool = True,
     tr_parts: List[str] = []
     for i, row in enumerate(rows):
         is_header = header and i == 0
+        body_idx = i - (1 if header else 0)
+        # Inline shading: header gets navy, every other body row gets light fill.
+        if is_header:
+            shade = WAME_NAVY
+            text_color = "FFFFFF"
+            bold = True
+        elif body_idx >= 0 and body_idx % 2 == 1:
+            shade = WAME_LIGHT
+            text_color = None
+            bold = False
+        else:
+            shade = "FFFFFF"
+            text_color = None
+            bold = False
         cells: List[str] = []
         for j in range(n_cols):
             text = row[j] if j < len(row) else ""
-            shade = WAME_NAVY if is_header else "FFFFFF"
-            color = "FFFFFF" if is_header else WAME_TEXT
-            bold = is_header
-            cell_borders = (
-                '<w:tcBorders>'
-                f'<w:top w:val="single" w:sz="4" w:color="{WAME_TABLE_BORDER}"/>'
-                f'<w:left w:val="single" w:sz="4" w:color="{WAME_TABLE_BORDER}"/>'
-                f'<w:bottom w:val="single" w:sz="4" w:color="{WAME_TABLE_BORDER}"/>'
-                f'<w:right w:val="single" w:sz="4" w:color="{WAME_TABLE_BORDER}"/>'
-                '</w:tcBorders>'
-            )
             tc_pr = (
                 f'<w:tcW w:type="dxa" w:w="{col_widths[j]}"/>'
-                f'{cell_borders}'
                 f'<w:shd w:val="clear" w:color="auto" w:fill="{shade}"/>'
-                '<w:tcMar><w:top w:w="120" w:type="dxa"/>'
-                '<w:left w:w="140" w:type="dxa"/>'
-                '<w:bottom w:w="120" w:type="dxa"/>'
-                '<w:right w:w="140" w:type="dxa"/></w:tcMar>'
                 '<w:vAlign w:val="center"/>'
             )
             content = _para(
-                text, bold=bold, color=color, size=10, font=WAME_FONT,
+                text, bold=bold, color=text_color, size=10, font=WAME_FONT,
                 space_after=0,
             )
             cells.append(f"<w:tc><w:tcPr>{tc_pr}</w:tcPr>{content}</w:tc>")
@@ -572,6 +581,7 @@ CONTENT_TYPES = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
   <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
   <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
+  <Override PartName="/word/fontTable.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"/>
   <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
   <Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
   <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
@@ -593,6 +603,7 @@ DOC_RELS_BASE = [
     ("rId3", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings", "settings.xml"),
     ("rId4", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header", "header1.xml"),
     ("rId5", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer", "footer1.xml"),
+    ("rId6", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable", "fontTable.xml"),
 ]
 
 
@@ -617,62 +628,119 @@ SETTINGS_XML = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:settings xmlns:w="{W_NS}">
   <w:defaultTabStop w:val="708"/>
   <w:characterSpacingControl w:val="doNotCompress"/>
+  <w:updateFields w:val="true"/>
   <w:compat>
     <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>
   </w:compat>
 </w:settings>
 '''
 
+FONT_TABLE_XML = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:fonts xmlns:w="{W_NS}">
+  <w:font w:name="{WAME_FONT}">
+    <w:altName w:val="{WAME_FONT_FALLBACK}"/>
+    <w:panose1 w:val="020F0502020204030204"/>
+    <w:charset w:val="00"/>
+    <w:family w:val="swiss"/>
+    <w:pitch w:val="variable"/>
+    <w:sig w:usb0="E4002EFF" w:usb1="C000247B" w:usb2="00000009" w:usb3="00000000" w:csb0="000001FF" w:csb1="00000000"/>
+  </w:font>
+  <w:font w:name="{WAME_FONT_FALLBACK}">
+    <w:altName w:val="Arial"/>
+    <w:panose1 w:val="020B0604020202020204"/>
+    <w:charset w:val="00"/>
+    <w:family w:val="swiss"/>
+    <w:pitch w:val="variable"/>
+  </w:font>
+  <w:font w:name="Arial">
+    <w:panose1 w:val="020B0604020202020204"/>
+    <w:charset w:val="00"/>
+    <w:family w:val="swiss"/>
+    <w:pitch w:val="variable"/>
+  </w:font>
+</w:fonts>
+'''
+
 NUMBERING_XML = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:numbering xmlns:w="{W_NS}">
   <w:abstractNum w:abstractNumId="0">
+    <w:nsid w:val="2A5E1B11"/>
     <w:multiLevelType w:val="hybridMultilevel"/>
-    <w:lvl w:ilvl="0">
+    <w:tmpl w:val="04050003"/>
+    <w:lvl w:ilvl="0" w:tplc="04050001">
       <w:start w:val="1"/>
       <w:numFmt w:val="bullet"/>
       <w:lvlText w:val="●"/>
       <w:lvlJc w:val="left"/>
       <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
-      <w:rPr><w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}" w:hint="default"/><w:color w:val="{WAME_GREEN}"/></w:rPr>
+      <w:rPr>
+        <w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}" w:hint="default"/>
+        <w:b/><w:bCs/>
+        <w:color w:val="{WAME_GREEN}"/>
+        <w:sz w:val="22"/>
+      </w:rPr>
     </w:lvl>
-    <w:lvl w:ilvl="1">
+    <w:lvl w:ilvl="1" w:tplc="04050003">
       <w:start w:val="1"/>
       <w:numFmt w:val="bullet"/>
       <w:lvlText w:val="○"/>
       <w:lvlJc w:val="left"/>
       <w:pPr><w:ind w:left="1440" w:hanging="360"/></w:pPr>
+      <w:rPr>
+        <w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}" w:hint="default"/>
+        <w:b/><w:bCs/>
+        <w:color w:val="{WAME_GREEN}"/>
+      </w:rPr>
     </w:lvl>
-    <w:lvl w:ilvl="2">
+    <w:lvl w:ilvl="2" w:tplc="04050005">
       <w:start w:val="1"/>
       <w:numFmt w:val="bullet"/>
       <w:lvlText w:val="■"/>
       <w:lvlJc w:val="left"/>
       <w:pPr><w:ind w:left="2160" w:hanging="360"/></w:pPr>
+      <w:rPr>
+        <w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}" w:hint="default"/>
+        <w:color w:val="{WAME_GREEN}"/>
+      </w:rPr>
     </w:lvl>
   </w:abstractNum>
   <w:abstractNum w:abstractNumId="1">
+    <w:nsid w:val="3F8C2E22"/>
     <w:multiLevelType w:val="hybridMultilevel"/>
-    <w:lvl w:ilvl="0">
+    <w:tmpl w:val="0405001D"/>
+    <w:lvl w:ilvl="0" w:tplc="04050017">
       <w:start w:val="1"/>
       <w:numFmt w:val="decimal"/>
       <w:lvlText w:val="%1."/>
       <w:lvlJc w:val="left"/>
       <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
-      <w:rPr><w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/><w:b/><w:bCs/><w:color w:val="{WAME_NAVY}"/></w:rPr>
+      <w:rPr>
+        <w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}" w:hint="default"/>
+        <w:b/><w:bCs/>
+        <w:color w:val="{WAME_NAVY}"/>
+      </w:rPr>
     </w:lvl>
-    <w:lvl w:ilvl="1">
+    <w:lvl w:ilvl="1" w:tplc="04050019">
       <w:start w:val="1"/>
       <w:numFmt w:val="lowerLetter"/>
       <w:lvlText w:val="%2)"/>
       <w:lvlJc w:val="left"/>
       <w:pPr><w:ind w:left="1440" w:hanging="360"/></w:pPr>
+      <w:rPr>
+        <w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}" w:hint="default"/>
+        <w:color w:val="{WAME_NAVY}"/>
+      </w:rPr>
     </w:lvl>
-    <w:lvl w:ilvl="2">
+    <w:lvl w:ilvl="2" w:tplc="0405001B">
       <w:start w:val="1"/>
       <w:numFmt w:val="lowerRoman"/>
       <w:lvlText w:val="%3."/>
       <w:lvlJc w:val="left"/>
       <w:pPr><w:ind w:left="2160" w:hanging="360"/></w:pPr>
+      <w:rPr>
+        <w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}" w:hint="default"/>
+        <w:color w:val="{WAME_NAVY}"/>
+      </w:rPr>
     </w:lvl>
   </w:abstractNum>
   <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
@@ -688,13 +756,13 @@ def _styles_xml() -> str:
     <w:rPrDefault>
       <w:rPr>
         <w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/>
-        <w:sz w:val="22"/>
+        <w:sz w:val="21"/>
         <w:color w:val="{WAME_TEXT}"/>
         <w:lang w:val="sk-SK"/>
       </w:rPr>
     </w:rPrDefault>
     <w:pPrDefault>
-      <w:pPr><w:spacing w:after="120" w:line="288" w:lineRule="auto"/></w:pPr>
+      <w:pPr><w:spacing w:after="160" w:line="312" w:lineRule="auto"/></w:pPr>
     </w:pPrDefault>
   </w:docDefaults>
   <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
@@ -705,25 +773,30 @@ def _styles_xml() -> str:
     <w:name w:val="Title"/>
     <w:basedOn w:val="Normal"/>
     <w:pPr><w:spacing w:before="0" w:after="240"/><w:jc w:val="left"/></w:pPr>
-    <w:rPr><w:b/><w:sz w:val="56"/><w:color w:val="{WAME_NAVY}"/></w:rPr>
+    <w:rPr><w:b/><w:sz w:val="64"/><w:color w:val="{WAME_NAVY}"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Subtitle">
     <w:name w:val="Subtitle"/>
     <w:basedOn w:val="Normal"/>
     <w:pPr><w:spacing w:before="0" w:after="240"/></w:pPr>
-    <w:rPr><w:sz w:val="28"/><w:color w:val="{WAME_MUTED}"/></w:rPr>
+    <w:rPr><w:sz w:val="28"/><w:color w:val="{WAME_SUBTITLE}"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading1">
     <w:name w:val="Heading 1"/>
     <w:basedOn w:val="Normal"/>
-    <w:pPr><w:spacing w:before="480" w:after="240"/><w:keepNext/><w:outlineLvl w:val="0"/></w:pPr>
-    <w:rPr><w:b/><w:bCs/><w:sz w:val="36"/><w:color w:val="{WAME_NAVY}"/></w:rPr>
+    <w:pPr>
+      <w:spacing w:before="520" w:after="280"/>
+      <w:pBdr><w:bottom w:val="single" w:sz="14" w:space="6" w:color="{WAME_GREEN}"/></w:pBdr>
+      <w:keepNext/>
+      <w:outlineLvl w:val="0"/>
+    </w:pPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="44"/><w:color w:val="{WAME_NAVY}"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading2">
     <w:name w:val="Heading 2"/>
     <w:basedOn w:val="Normal"/>
-    <w:pPr><w:spacing w:before="320" w:after="160"/><w:keepNext/><w:outlineLvl w:val="1"/></w:pPr>
-    <w:rPr><w:b/><w:bCs/><w:sz w:val="28"/><w:color w:val="{WAME_NAVY}"/></w:rPr>
+    <w:pPr><w:spacing w:before="360" w:after="160"/><w:keepNext/><w:outlineLvl w:val="1"/></w:pPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="30"/><w:color w:val="{WAME_NAVY}"/></w:rPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Heading3">
     <w:name w:val="Heading 3"/>
@@ -731,10 +804,16 @@ def _styles_xml() -> str:
     <w:pPr><w:spacing w:before="240" w:after="120"/><w:keepNext/></w:pPr>
     <w:rPr><w:b/><w:bCs/><w:sz w:val="24"/><w:color w:val="{WAME_NAVY}"/></w:rPr>
   </w:style>
+  <w:style w:type="paragraph" w:styleId="Lede">
+    <w:name w:val="Lede"/>
+    <w:basedOn w:val="Normal"/>
+    <w:pPr><w:spacing w:before="0" w:after="240"/></w:pPr>
+    <w:rPr><w:i/><w:iCs/><w:color w:val="{WAME_MUTED}"/><w:sz w:val="22"/></w:rPr>
+  </w:style>
   <w:style w:type="paragraph" w:styleId="ListBullet">
     <w:name w:val="List Bullet"/>
     <w:basedOn w:val="Normal"/>
-    <w:pPr><w:spacing w:after="60"/><w:ind w:left="720" w:hanging="360"/></w:pPr>
+    <w:pPr><w:spacing w:after="80"/><w:ind w:left="720" w:hanging="360"/></w:pPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Quote">
     <w:name w:val="Quote"/>
@@ -742,55 +821,129 @@ def _styles_xml() -> str:
     <w:pPr><w:spacing w:after="160"/><w:ind w:left="480"/></w:pPr>
     <w:rPr><w:i/><w:color w:val="{WAME_MUTED}"/></w:rPr>
   </w:style>
+  <w:style w:type="table" w:default="1" w:styleId="TableNormal">
+    <w:name w:val="Normal Table"/>
+    <w:uiPriority w:val="99"/>
+    <w:semiHidden/>
+    <w:unhideWhenUsed/>
+    <w:tblPr>
+      <w:tblInd w:w="0" w:type="dxa"/>
+      <w:tblCellMar>
+        <w:top w:w="0" w:type="dxa"/>
+        <w:left w:w="108" w:type="dxa"/>
+        <w:bottom w:w="0" w:type="dxa"/>
+        <w:right w:w="108" w:type="dxa"/>
+      </w:tblCellMar>
+    </w:tblPr>
+  </w:style>
+  <w:style w:type="table" w:styleId="WameTable">
+    <w:name w:val="WAME Table"/>
+    <w:basedOn w:val="TableNormal"/>
+    <w:uiPriority w:val="59"/>
+    <w:qFormat/>
+    <w:rPr>
+      <w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/>
+      <w:sz w:val="21"/>
+      <w:color w:val="{WAME_TEXT}"/>
+    </w:rPr>
+    <w:tblPr>
+      <w:tblStyleRowBandSize w:val="1"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="4" w:color="{WAME_TABLE_BORDER}"/>
+        <w:left w:val="single" w:sz="4" w:color="{WAME_TABLE_BORDER}"/>
+        <w:bottom w:val="single" w:sz="4" w:color="{WAME_TABLE_BORDER}"/>
+        <w:right w:val="single" w:sz="4" w:color="{WAME_TABLE_BORDER}"/>
+        <w:insideH w:val="single" w:sz="4" w:color="{WAME_TABLE_BORDER}"/>
+        <w:insideV w:val="single" w:sz="4" w:color="{WAME_TABLE_BORDER}"/>
+      </w:tblBorders>
+      <w:tblCellMar>
+        <w:top w:w="140" w:type="dxa"/>
+        <w:left w:w="160" w:type="dxa"/>
+        <w:bottom w:w="140" w:type="dxa"/>
+        <w:right w:w="160" w:type="dxa"/>
+      </w:tblCellMar>
+    </w:tblPr>
+    <w:tcPr>
+      <w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>
+      <w:vAlign w:val="center"/>
+    </w:tcPr>
+    <w:tblStylePr w:type="firstRow">
+      <w:rPr>
+        <w:b/><w:bCs/>
+        <w:color w:val="FFFFFF"/>
+      </w:rPr>
+      <w:tblPr/>
+      <w:tcPr>
+        <w:shd w:val="clear" w:color="auto" w:fill="{WAME_NAVY}"/>
+      </w:tcPr>
+    </w:tblStylePr>
+    <w:tblStylePr w:type="band1Horz">
+      <w:tblPr/>
+      <w:tcPr>
+        <w:shd w:val="clear" w:color="auto" w:fill="{WAME_LIGHT}"/>
+      </w:tcPr>
+    </w:tblStylePr>
+  </w:style>
 </w:styles>
 '''
 
 
 def _header_xml(meta: Dict[str, Any]) -> str:
-    """Page header: 'WAME s.r.o.' bold navy left, italic confidentiality text right."""
-    client = _xml_escape((meta.get("client") or {}).get("company") or "klient")
-    confidential = _xml_escape(
-        meta.get("confidentiality")
-        or f"Dôverné — pre interné použitie {client} a WAME"
+    """Page header: 'WAME s.r.o.' (navy + green s.r.o.) left, 'DNR — Title' grey right, flat hairline below."""
+    title = _xml_escape(meta.get("title") or "Detailný návrh riešenia")
+    right_text = f"DNR — {title}"
+    font_attr = (
+        f'<w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/>'
     )
     return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:hdr xmlns:w="{W_NS}">
   <w:p>
-    <w:pPr><w:tabs><w:tab w:val="right" w:pos="9026"/></w:tabs><w:jc w:val="left"/></w:pPr>
-    <w:r><w:rPr><w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/><w:b/><w:bCs/><w:color w:val="{WAME_NAVY}"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr><w:t xml:space="preserve">WAME s.r.o.</w:t></w:r>
-    <w:r><w:rPr><w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr><w:tab/></w:r>
-    <w:r><w:rPr><w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/><w:i/><w:iCs/><w:color w:val="{WAME_MUTED}"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr><w:t xml:space="preserve">{confidential}</w:t></w:r>
+    <w:pPr>
+      <w:pBdr><w:bottom w:val="single" w:sz="12" w:space="4" w:color="{WAME_NAVY}"/></w:pBdr>
+      <w:tabs><w:tab w:val="right" w:pos="9026"/></w:tabs>
+      <w:spacing w:after="0"/>
+      <w:jc w:val="left"/>
+    </w:pPr>
+    <w:r><w:rPr>{font_attr}<w:b/><w:bCs/><w:color w:val="{WAME_NAVY}"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve">WAME</w:t></w:r>
+    <w:r><w:rPr>{font_attr}<w:b/><w:bCs/><w:color w:val="{WAME_GREEN}"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve"> s.r.o.</w:t></w:r>
+    <w:r><w:rPr>{font_attr}<w:sz w:val="16"/></w:rPr><w:tab/></w:r>
+    <w:r><w:rPr>{font_attr}<w:color w:val="{WAME_MUTED}"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr><w:t xml:space="preserve">{right_text}</w:t></w:r>
   </w:p>
 </w:hdr>
 '''
 
 
 def _footer_xml(meta: Dict[str, Any]) -> str:
-    """Page footer: green top border, 'DNR — Title | Client | Version' left, 'Strana X / Y' right."""
-    title = _xml_escape(meta.get("title") or "Detailný návrh riešenia")
-    version = _xml_escape(meta.get("version") or "v1.0")
-    client = _xml_escape((meta.get("client") or {}).get("company") or "")
-    parts = [f"DNR — {title}"]
-    if client:
-        parts.append(client)
-    parts.append(version)
-    left_text = "  |  ".join(parts)
+    """Page footer: flat navy hairline top, 'Dôverné · DNR — Title · v1.0' left, 'Strana X / Y' right."""
+    title = meta.get("title") or "Detailný návrh riešenia"
+    version = meta.get("version") or "v1.0"
+    default_left = f"Dôverné — interný dokument WAME s.r.o.  ·  DNR — {title}  ·  {version}"
+    left_text = _xml_escape(meta.get("footer_left") or default_left)
     rpr = (
         f'<w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/>'
         f'<w:color w:val="{WAME_MUTED}"/><w:sz w:val="16"/><w:szCs w:val="16"/>'
     )
+    page_rpr = (
+        f'<w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/>'
+        f'<w:color w:val="{WAME_NAVY}"/><w:b/><w:bCs/><w:sz w:val="16"/><w:szCs w:val="16"/>'
+    )
     return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:ftr xmlns:w="{W_NS}">
   <w:p>
-    <w:pPr><w:pBdr><w:top w:val="single" w:sz="6" w:space="8" w:color="{WAME_GREEN}"/></w:pBdr><w:tabs><w:tab w:val="right" w:pos="9026"/></w:tabs><w:jc w:val="left"/></w:pPr>
+    <w:pPr>
+      <w:pBdr><w:top w:val="single" w:sz="12" w:space="4" w:color="{WAME_NAVY}"/></w:pBdr>
+      <w:tabs><w:tab w:val="right" w:pos="9026"/></w:tabs>
+      <w:spacing w:after="0"/>
+      <w:jc w:val="left"/>
+    </w:pPr>
     <w:r><w:rPr>{rpr}</w:rPr><w:t xml:space="preserve">{left_text}</w:t></w:r>
     <w:r><w:rPr>{rpr}</w:rPr><w:tab/></w:r>
     <w:r><w:rPr>{rpr}</w:rPr><w:t xml:space="preserve">Strana </w:t></w:r>
-    <w:r><w:rPr>{rpr}</w:rPr><w:fldChar w:fldCharType="begin"/></w:r>
-    <w:r><w:rPr>{rpr}</w:rPr><w:instrText xml:space="preserve">PAGE</w:instrText></w:r>
-    <w:r><w:rPr>{rpr}</w:rPr><w:fldChar w:fldCharType="separate"/></w:r>
-    <w:r><w:rPr>{rpr}</w:rPr><w:t>1</w:t></w:r>
-    <w:r><w:rPr>{rpr}</w:rPr><w:fldChar w:fldCharType="end"/></w:r>
+    <w:r><w:rPr>{page_rpr}</w:rPr><w:fldChar w:fldCharType="begin"/></w:r>
+    <w:r><w:rPr>{page_rpr}</w:rPr><w:instrText xml:space="preserve">PAGE</w:instrText></w:r>
+    <w:r><w:rPr>{page_rpr}</w:rPr><w:fldChar w:fldCharType="separate"/></w:r>
+    <w:r><w:rPr>{page_rpr}</w:rPr><w:t>1</w:t></w:r>
+    <w:r><w:rPr>{page_rpr}</w:rPr><w:fldChar w:fldCharType="end"/></w:r>
     <w:r><w:rPr>{rpr}</w:rPr><w:t xml:space="preserve"> / </w:t></w:r>
     <w:r><w:rPr>{rpr}</w:rPr><w:fldChar w:fldCharType="begin"/></w:r>
     <w:r><w:rPr>{rpr}</w:rPr><w:instrText xml:space="preserve">NUMPAGES</w:instrText></w:r>
@@ -821,12 +974,12 @@ def _core_xml(meta: Dict[str, Any]) -> str:
 
 
 _IMAGE_REGISTRY: List[Dict[str, Any]] = []
-_REL_ID_COUNTER = [6]  # next free rId (rId1–5 are reserved)
+_REL_ID_COUNTER = [7]  # next free rId (rId1–6 are reserved for styles/numbering/settings/header/footer/fontTable)
 
 
 def _reset_image_registry() -> None:
     _IMAGE_REGISTRY.clear()
-    _REL_ID_COUNTER[0] = 6
+    _REL_ID_COUNTER[0] = 7
 
 
 def register_image(src_path: str) -> Optional[Dict[str, Any]]:
@@ -911,88 +1064,191 @@ APP_XML = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 
 # ---------- Section builders ----------
 
-def _build_title_page(meta: Dict[str, Any]) -> str:
-    """Cover page styled to match the sample DNR.
+def _eyebrow_tag(text: str) -> str:
+    """Rectangular green tag — uppercase white text on solid WAME green fill.
 
-    Layout:
-      • Top spacer (2400 twips)
-      • "WAME s.r.o." brand line — "WAME" navy + " s.r.o." green, bold, size 48
-      • "Detailný návrh riešenia" tag with bottom green underline
-      • Big project title (size 56, navy)
-      • Subtitle line (size 32, muted-navy)
-      • Spacer
-      • Metadata as label/value pairs (Klient, Dodávateľ, Verzia dokumentu, Dátum vypracovania, ...)
-      • Page break
+    Rendered as a single-cell mini-table so the green fill hugs the text (auto width)
+    instead of stretching across the page like a paragraph border would.
+    """
+    safe = _xml_escape(text)
+    cell_pr = (
+        '<w:tcW w:type="auto" w:w="0"/>'
+        '<w:tcBorders>'
+        '<w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/>'
+        '</w:tcBorders>'
+        f'<w:shd w:val="clear" w:color="auto" w:fill="{WAME_GREEN}"/>'
+        '<w:tcMar><w:top w:w="120" w:type="dxa"/>'
+        '<w:left w:w="200" w:type="dxa"/>'
+        '<w:bottom w:w="120" w:type="dxa"/>'
+        '<w:right w:w="200" w:type="dxa"/></w:tcMar>'
+        '<w:vAlign w:val="center"/>'
+    )
+    tbl_pr = (
+        '<w:tblPr>'
+        '<w:tblW w:type="auto" w:w="0"/>'
+        '<w:tblBorders>'
+        '<w:top w:val="nil"/><w:left w:val="nil"/><w:bottom w:val="nil"/><w:right w:val="nil"/>'
+        '<w:insideH w:val="nil"/><w:insideV w:val="nil"/>'
+        '</w:tblBorders>'
+        '</w:tblPr>'
+        '<w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>'
+    )
+    font_attr = (
+        f'<w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/>'
+    )
+    inner_p = (
+        '<w:p><w:pPr><w:spacing w:before="0" w:after="0"/></w:pPr>'
+        f'<w:r><w:rPr>{font_attr}<w:b/><w:bCs/><w:color w:val="FFFFFF"/>'
+        '<w:sz w:val="18"/><w:szCs w:val="18"/><w:spacing w:val="40"/></w:rPr>'
+        f'<w:t xml:space="preserve">{safe}</w:t></w:r></w:p>'
+    )
+    return (
+        f'<w:tbl>{tbl_pr}<w:tr><w:tc><w:tcPr>{cell_pr}</w:tcPr>{inner_p}</w:tc></w:tr></w:tbl>'
+    )
+
+
+def _cover_meta_table(rows: List[Tuple[str, str]]) -> str:
+    """2-col label/value metadata table for the cover page.
+
+    Uses the WameTable style + explicit row banding. Odd body rows get the
+    light fill; left column is inline-bold so labels stand out.
+    """
+    if not rows:
+        return ""
+    col_widths = [2800, 6226]
+    grid = "".join(f'<w:gridCol w:w="{w}"/>' for w in col_widths)
+    tbl_pr = (
+        '<w:tblPr>'
+        '<w:tblStyle w:val="WameTable"/>'
+        '<w:tblW w:type="dxa" w:w="9026"/>'
+        '<w:tblLook w:val="04A0" w:firstRow="0" w:lastRow="0" '
+        'w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>'
+        '</w:tblPr>'
+        f'<w:tblGrid>{grid}</w:tblGrid>'
+    )
+
+    def cell(text: str, *, bold: bool, width: int, fill: str) -> str:
+        tc_pr = (
+            f'<w:tcW w:type="dxa" w:w="{width}"/>'
+            f'<w:shd w:val="clear" w:color="auto" w:fill="{fill}"/>'
+            '<w:vAlign w:val="center"/>'
+        )
+        content = _para(text, bold=bold, color=WAME_TEXT, size=10, font=WAME_FONT,
+                        space_after=0)
+        return f'<w:tc><w:tcPr>{tc_pr}</w:tcPr>{content}</w:tc>'
+
+    tr_parts: List[str] = []
+    for i, (label, value) in enumerate(rows):
+        fill = WAME_LIGHT if i % 2 == 1 else "FFFFFF"
+        cells = (
+            cell(label, bold=True, width=col_widths[0], fill=fill)
+            + cell(value or "[DOPLNIŤ]", bold=False, width=col_widths[1], fill=fill)
+        )
+        tr_parts.append(f'<w:tr>{cells}</w:tr>')
+    return f'<w:tbl>{tbl_pr}{"".join(tr_parts)}</w:tbl>'
+
+
+def _build_title_page(meta: Dict[str, Any]) -> str:
+    """Cover page rebuilt to match the reference DNR exactly.
+
+    Layout (top to bottom):
+      1. Big "WAME." brand mark (navy + green dot, ~32pt bold)
+      2. Tagline "Softvér, ktorý rozumie vášmu biznisu."
+      3. Vertical spacer
+      4. Green eyebrow tag "DETAILNÝ NÁVRH RIEŠENIA"
+      5. Massive project title (~28pt bold navy)
+      6. Subtitle line
+      7. Italic muted sub-subtitle (optional 'context_line')
+      8. Vertical spacer
+      9. Metadata table (Pole | Hodnota, 2 cols, alternating fills)
+      10. Italic muted confidentiality footnote
+      11. Page break
     """
     client = meta.get("client") or {}
     title = meta.get("title") or "Detailný návrh riešenia"
     subtitle = meta.get("subtitle") or ""
+    context_line = meta.get("context_line") or ""
+    tagline = meta.get("tagline") or "Softvér, ktorý rozumie vášmu biznisu."
     version = meta.get("version") or "v1.0"
     date = meta.get("date") or ""
     prepared = meta.get("prepared_by") or "WAME s.r.o."
+    stav = meta.get("stav") or "Návrh na schválenie"
+    cover_note = (
+        meta.get("cover_note")
+        or "Tento dokument je dôverný a určený výhradne pre interné rozhodovanie WAME s.r.o."
+    )
 
+    font_attr = (
+        f'<w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/>'
+    )
     parts: List[str] = []
-    # Top spacer
-    parts.append('<w:p><w:pPr><w:spacing w:after="2400"/></w:pPr></w:p>')
 
-    # Brand mark: "WAME" navy + " s.r.o." green
+    # Top spacer above the WAME logo (~2cm)
+    parts.append('<w:p><w:pPr><w:spacing w:after="800"/></w:pPr></w:p>')
+
+    # WAME brand mark: navy WAME + green " s.r.o."
     parts.append(
-        '<w:p><w:pPr><w:spacing w:after="240"/><w:jc w:val="left"/></w:pPr>'
-        f'<w:r><w:rPr><w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/>'
-        f'<w:b/><w:bCs/><w:color w:val="{WAME_NAVY}"/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr>'
+        '<w:p><w:pPr><w:spacing w:before="0" w:after="80"/><w:jc w:val="left"/></w:pPr>'
+        f'<w:r><w:rPr>{font_attr}<w:b/><w:bCs/><w:color w:val="{WAME_NAVY}"/>'
+        '<w:sz w:val="68"/><w:szCs w:val="68"/></w:rPr>'
         '<w:t xml:space="preserve">WAME</w:t></w:r>'
-        f'<w:r><w:rPr><w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/>'
-        f'<w:b/><w:bCs/><w:color w:val="{WAME_GREEN}"/><w:sz w:val="48"/><w:szCs w:val="48"/></w:rPr>'
+        f'<w:r><w:rPr>{font_attr}<w:b/><w:bCs/><w:color w:val="{WAME_GREEN}"/>'
+        '<w:sz w:val="68"/><w:szCs w:val="68"/></w:rPr>'
         '<w:t xml:space="preserve"> s.r.o.</w:t></w:r></w:p>'
     )
 
-    # Document type tag with green underline
-    parts.append(
-        '<w:p><w:pPr>'
-        f'<w:pBdr><w:bottom w:val="single" w:sz="18" w:space="6" w:color="{WAME_GREEN}"/></w:pBdr>'
-        '<w:spacing w:after="1200"/></w:pPr>'
-        f'<w:r><w:rPr><w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/>'
-        f'<w:color w:val="{WAME_SUBTITLE}"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr>'
-        '<w:t xml:space="preserve">Detailný návrh riešenia</w:t></w:r></w:p>'
-    )
+    # Tagline
+    parts.append(_para(tagline, color=WAME_TEXT, size=11, font=WAME_FONT,
+                       space_after=2200))
+
+    # Eyebrow green tag
+    parts.append(_eyebrow_tag("DETAILNÝ NÁVRH RIEŠENIA"))
+
+    # Mini spacer between tag and title
+    parts.append('<w:p><w:pPr><w:spacing w:after="240"/></w:pPr></w:p>')
 
     # Big title
-    parts.append(_para(title, bold=True, color=WAME_NAVY, size=28, font=WAME_FONT,
-                       align="left", space_after=280))
+    parts.append(_para(title, bold=True, color=WAME_NAVY, size=34, font=WAME_FONT,
+                       align="left", space_after=160))
 
-    # Subtitle / context
+    # Subtitle
     if subtitle:
-        parts.append(_para(subtitle, color=WAME_SUBTITLE, size=16, font=WAME_FONT,
-                           align="left", space_after=1200))
-    else:
-        parts.append('<w:p><w:pPr><w:spacing w:after="1200"/></w:pPr></w:p>')
+        parts.append(_para(subtitle, color=WAME_SUBTITLE, size=14, font=WAME_FONT,
+                           align="left", space_after=80))
+    # Context line (italic muted)
+    if context_line:
+        parts.append(_para(context_line, italic=True, color=WAME_MUTED, size=11,
+                           font=WAME_FONT, align="left", space_after=240))
 
-    # Spacer before metadata block
-    parts.append('<w:p><w:pPr><w:spacing w:after="2400"/></w:pPr></w:p>')
+    # Spacer before metadata table
+    parts.append('<w:p><w:pPr><w:spacing w:after="500"/></w:pPr></w:p>')
 
-    # Metadata as label/value pairs
-    meta_pairs: List[Tuple[str, str]] = []
+    # Metadata table (Pole | Hodnota)
+    meta_rows: List[Tuple[str, str]] = []
     if client.get("company"):
-        meta_pairs.append(("Klient", client["company"]))
-    meta_pairs.append(("Dodávateľ", "WAME s.r.o."))
-    meta_pairs.append(("Verzia dokumentu", version))
-    if date:
-        meta_pairs.append(("Dátum vypracovania", date))
-    if prepared and prepared != "WAME s.r.o.":
-        meta_pairs.append(("Vypracoval", prepared))
+        meta_rows.append(("Objednávateľ", client["company"]))
+    meta_rows.append(("Dodávateľ", "WAME s.r.o."))
+    contact_pieces: List[str] = []
     if client.get("contact_name"):
-        contact_line = client["contact_name"]
-        if client.get("contact_email"):
-            contact_line += f" · {client['contact_email']}"
-        if client.get("contact_phone"):
-            contact_line += f" · {client['contact_phone']}"
-        meta_pairs.append(("Kontakt klienta", contact_line))
+        contact_pieces.append(client["contact_name"])
+    if client.get("contact_email"):
+        contact_pieces.append(client["contact_email"])
+    if client.get("contact_phone"):
+        contact_pieces.append(client["contact_phone"])
+    if contact_pieces:
+        meta_rows.append(("Kontaktné osoby", " · ".join(contact_pieces)))
+    meta_rows.append(("Verzia dokumentu", version))
+    if date:
+        meta_rows.append(("Dátum", date))
+    meta_rows.append(("Stav", stav))
+    meta_rows.append(("Vypracoval", prepared))
 
-    for label, value in meta_pairs:
-        parts.append(_para(label, bold=True, color=WAME_MUTED, size=9, font=WAME_FONT,
-                           space_after=80))
-        parts.append(_para(value, color=WAME_TEXT, size=12, font=WAME_FONT,
-                           space_after=240))
+    parts.append(_cover_meta_table(meta_rows))
+
+    # Spacer + confidentiality footnote
+    parts.append('<w:p><w:pPr><w:spacing w:after="500"/></w:pPr></w:p>')
+    parts.append(_para(cover_note, italic=True, color=WAME_MUTED, size=10,
+                       font=WAME_FONT, align="left", space_after=0))
 
     parts.append(_page_break())
     return "".join(parts)
@@ -1003,11 +1259,22 @@ def _page_break() -> str:
 
 
 def _build_uvod(s: Dict[str, Any]) -> str:
-    return _section_title("01", "Úvod a účel dokumentu") + _body_para(s.get("text", ""))
+    out = [_section_title("1", "Úvod a účel dokumentu")]
+    if s.get("lede"):
+        out.append(_para(s["lede"], italic=True, color=WAME_MUTED, size=11,
+                         space_after=240))
+    if s.get("text"):
+        out.append(_body_para(s["text"]))
+    return "".join(out)
 
 
 def _build_vychodiskovy(s: Dict[str, Any]) -> str:
-    out = [_section_title("02", "Východiskový stav"), _body_para(s.get("text", ""))]
+    out = [_section_title("2", "Východiskový stav")]
+    if s.get("lede"):
+        out.append(_para(s["lede"], italic=True, color=WAME_MUTED, size=11,
+                         space_after=240))
+    if s.get("text"):
+        out.append(_body_para(s["text"]))
     co_zostava = s.get("co_zostava") or []
     if co_zostava:
         out.append(_heading("2.1 Čo zostáva v platnosti", level=2))
@@ -1016,7 +1283,10 @@ def _build_vychodiskovy(s: Dict[str, Any]) -> str:
 
 
 def _build_ciele(s: Dict[str, Any]) -> str:
-    out = [_section_title("03", "Ciele projektu")]
+    out = [_section_title("3", "Ciele projektu")]
+    if s.get("lede"):
+        out.append(_para(s["lede"], italic=True, color=WAME_MUTED, size=11,
+                         space_after=240))
     out.append(_heading("3.1 Biznis ciele", level=2))
     out.extend(_render_list(s.get("biznis", []), numbered=True))
     out.append(_heading("3.2 Technické ciele", level=2))
@@ -1027,7 +1297,7 @@ def _build_ciele(s: Dict[str, Any]) -> str:
 
 
 def _build_popis(s: Dict[str, Any]) -> str:
-    out = [_section_title("04", "Popis riešenia a rozsah"), _body_para(s.get("uvod", ""))]
+    out = [_section_title("4", "Popis riešenia a rozsah"), _body_para(s.get("uvod", ""))]
     for i, mod in enumerate(s.get("moduly", []), 1):
         out.append(_heading(f"4.{i} {mod.get('nazov', 'Modul')}", level=2))
         out.append(_body_para(mod.get("popis", "")))
@@ -1066,7 +1336,7 @@ def _build_popis(s: Dict[str, Any]) -> str:
 
 
 def _build_roly(roly: List[Dict[str, Any]]) -> str:
-    out = [_section_title("05", "Používateľské roly a prístupy")]
+    out = [_section_title("5", "Používateľské roly a prístupy")]
     rows = [["Rola", "Kto to je", "Čo vidí / čo môže robiť"]]
     for r in roly:
         rows.append([r.get("rola", ""), r.get("kto", ""), r.get("opravnenia", "")])
@@ -1075,7 +1345,7 @@ def _build_roly(roly: List[Dict[str, Any]]) -> str:
 
 
 def _build_technicke(s: Dict[str, Any]) -> str:
-    out = [_section_title("06", "Technické riešenie")]
+    out = [_section_title("6", "Technické riešenie")]
     plat = s.get("platforma", {})
     out.append(_heading("Platforma a technológie", level=2))
     rows = [["Vrstva", "Technológia"]]
@@ -1108,7 +1378,7 @@ def _build_technicke(s: Dict[str, Any]) -> str:
 
 
 def _build_gdpr(s: Dict[str, Any]) -> str:
-    out = [_section_title("07", "GDPR a právne požiadavky"), _para(s.get("text", ""))]
+    out = [_section_title("7", "GDPR a právne požiadavky"), _para(s.get("text", ""))]
     if s.get("osobne_udaje"):
         out.append(_heading("Zbierané osobné údaje", level=3))
         out.extend(_bullet(x) for x in s["osobne_udaje"])
@@ -1123,7 +1393,7 @@ def _build_gdpr(s: Dict[str, Any]) -> str:
 
 def _build_podklady(items: List[Dict[str, Any]]) -> str:
     label_map = {"dodane": "✅ Dodané", "v_priprave": "⏳ V príprave", "chybajuce": "❌ Chýbajúce"}
-    out = [_section_title("08", "Podklady od klienta")]
+    out = [_section_title("8", "Podklady od klienta")]
     rows = [["Podklad", "Formát", "Termín", "Stav"]]
     for p in items:
         rows.append([
@@ -1135,7 +1405,7 @@ def _build_podklady(items: List[Dict[str, Any]]) -> str:
 
 
 def _build_fazy(items: List[Dict[str, Any]]) -> str:
-    out = [_section_title("09", "Fázy projektu a harmonogram")]
+    out = [_section_title("9", "Fázy projektu a harmonogram")]
     rows = [["#", "Fáza", "Trvanie", "Platobný míľnik"]]
     for i, f in enumerate(items, 1):
         rows.append([
@@ -1176,6 +1446,9 @@ def _build_rizika(items: List[Dict[str, Any]]) -> str:
 
 def _build_podmienky(s: Dict[str, Any]) -> str:
     out = [_section_title("11", "Podmienky a záväzky")]
+    if s.get("lede"):
+        out.append(_para(s["lede"], italic=True, color=WAME_MUTED, size=11,
+                         space_after=240))
     out.append(_heading("WAME sa zaväzuje", level=2))
     out.extend(_bullet(x) for x in s.get("wame_zavazky", []))
     out.append(_heading("Klient sa zaväzuje", level=2))
@@ -1213,46 +1486,145 @@ def _build_volitelne(s: Dict[str, Any]) -> str:
 
 
 def _build_schvalenie(s: Dict[str, Any], meta: Dict[str, Any]) -> str:
-    """Approval section — per-party blocks with Pole/Hodnota table and physical signature space.
+    """Approval section — clean 2-col block with a tall signing area per party.
 
-    For each signer (Za klienta, Za WAME):
-      • Heading "Za klienta — [Company]"
-      • Table with Meno, Funkcia, Dátum, Podpis fields
-      • 3 empty paragraphs for physical signature
+    Layout:
+      • Intro paragraph
+      • 2-col table: header row with party labels, then a single ~7.5cm row
+        per party containing Meno/Funkcia/Dátum at the top and a Podpis
+        placeholder at the bottom — plenty of vertical space for the actual
+        handwritten signature.
+      • Summary line ('Verzia dokumentu: v1.2 • Dátum: ... • Vypracoval: ...')
     """
     out = [_section_title("12", "Schválenie dokumentu")]
     out.append(_body_para(
-        "Bez schváleného DNR sa vývoj nezačína. Akékoľvek zmeny v rozsahu nad rámec "
-        "tohto DNR sú riešené formou písomného dodatku, ktorý odsúhlasia obe strany "
-        "pred ich implementáciou."
+        "Podpisom tohto dokumentu obe strany potvrdzujú súhlas s rozsahom, technickým "
+        "riešením a harmonogramom. DNR sa po schválení stáva záväzným podkladom pre vývoj."
     ))
-    if s.get("datum"):
-        out.append(_para(f"Dátum schválenia: {s['datum']}", bold=True, color=WAME_NAVY))
 
     client_company = (meta.get("client") or {}).get("company") or "klient"
-    parties = [
-        ("Za klienta — " + client_company, s.get("za_klienta") or {}),
-        ("Za WAME — WAME s.r.o.", s.get("za_wame") or {}),
-    ]
+    za_klienta = s.get("za_klienta") or {}
+    za_wame = s.get("za_wame") or {}
+    if isinstance(za_klienta, str):
+        za_klienta = {"meno": za_klienta}
+    if isinstance(za_wame, str):
+        za_wame = {"meno": za_wame}
 
-    for heading, signer in parties:
-        out.append(_heading(heading, level=2))
-        if isinstance(signer, str):
-            signer = {"meno": signer}
-        rows = [
-            ["Pole", "Hodnota"],
-            ["Meno a priezvisko", signer.get("meno") or "[DOPLNIŤ]"],
-            ["Funkcia", signer.get("funkcia") or "[DOPLNIŤ]"],
-            ["Dátum", signer.get("datum") or s.get("datum") or "[DOPLNIŤ]"],
-            ["Podpis", ""],
-        ]
-        out.append(_table(rows, header=True, col_widths=[2708, 6318]))
-        # Physical signature space — 3 empty paragraphs
-        out.append(_para("", space_after=120))
-        out.append(_para("", space_after=120))
-        out.append(_para("_______________________________________________",
-                         color=WAME_MUTED, align="left"))
-        out.append(_para("podpis", color=WAME_MUTED, italic=True, size=9, align="left"))
+    placeholder = "___________________________________"
+    font_attr = (
+        f'<w:rFonts w:ascii="{WAME_FONT}" w:hAnsi="{WAME_FONT}" w:cs="{WAME_FONT}"/>'
+    )
+
+    def labeled_line(label: str, value: str) -> str:
+        safe_label = _xml_escape(f"{label}: ")
+        safe_value = _xml_escape(value or placeholder)
+        runs = (
+            f'<w:r><w:rPr>{font_attr}<w:b/><w:bCs/><w:color w:val="{WAME_TEXT}"/>'
+            '<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>'
+            f'<w:t xml:space="preserve">{safe_label}</w:t></w:r>'
+            f'<w:r><w:rPr>{font_attr}<w:color w:val="{WAME_TEXT}"/>'
+            '<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>'
+            f'<w:t xml:space="preserve">{safe_value}</w:t></w:r>'
+        )
+        return f'<w:p><w:pPr><w:spacing w:before="0" w:after="220"/></w:pPr>{runs}</w:p>'
+
+    def party_cell(signer: Dict[str, str], width: int) -> str:
+        meno = signer.get("meno", "")
+        funkcia = signer.get("funkcia", "")
+        datum = signer.get("datum", "") or s.get("datum", "")
+        blank = '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr></w:p>'
+        inner = (
+            labeled_line("Meno", meno)
+            + labeled_line("Funkcia", funkcia)
+            + labeled_line("Dátum", datum)
+            + blank * 3
+            + labeled_line("Podpis", "")
+        )
+        tc_pr = (
+            f'<w:tcW w:type="dxa" w:w="{width}"/>'
+            '<w:vAlign w:val="top"/>'
+            '<w:tcMar><w:top w:w="280" w:type="dxa"/>'
+            '<w:left w:w="280" w:type="dxa"/>'
+            '<w:bottom w:w="280" w:type="dxa"/>'
+            '<w:right w:w="280" w:type="dxa"/></w:tcMar>'
+        )
+        return f'<w:tc><w:tcPr>{tc_pr}</w:tcPr>{inner}</w:tc>'
+
+    def header_cell(text: str, width: int) -> str:
+        tc_pr = (
+            f'<w:tcW w:type="dxa" w:w="{width}"/>'
+            '<w:vAlign w:val="center"/>'
+            '<w:tcMar><w:top w:w="180" w:type="dxa"/>'
+            '<w:left w:w="280" w:type="dxa"/>'
+            '<w:bottom w:w="180" w:type="dxa"/>'
+            '<w:right w:w="280" w:type="dxa"/></w:tcMar>'
+        )
+        content = _para(text, bold=False, color=None, size=11, font=WAME_FONT,
+                        space_after=0)
+        return f'<w:tc><w:tcPr>{tc_pr}</w:tcPr>{content}</w:tc>'
+
+    col_widths = [4513, 4513]
+    grid = "".join(f'<w:gridCol w:w="{w}"/>' for w in col_widths)
+    tbl_pr = (
+        '<w:tblPr>'
+        '<w:tblStyle w:val="WameTable"/>'
+        '<w:tblW w:type="dxa" w:w="9026"/>'
+        '<w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" '
+        'w:firstColumn="0" w:lastColumn="0" w:noHBand="1" w:noVBand="1"/>'
+        '</w:tblPr>'
+        f'<w:tblGrid>{grid}</w:tblGrid>'
+    )
+
+    header_row = (
+        '<w:tr><w:trPr><w:tblHeader/></w:trPr>'
+        + header_cell(f"Za objednávateľa ({client_company})", width=col_widths[0])
+        + header_cell("Za dodávateľa (tím WAME)", width=col_widths[1])
+        + '</w:tr>'
+    )
+    # One body row per party — ~5cm min height (3000 twips) — Word can grow the row
+    # if the typed-in fields wrap to multiple lines.
+    body_row = (
+        '<w:tr><w:trPr><w:trHeight w:val="3000" w:hRule="atLeast"/></w:trPr>'
+        + party_cell(za_klienta, width=col_widths[0])
+        + party_cell(za_wame, width=col_widths[1])
+        + '</w:tr>'
+    )
+    out.append(f'<w:tbl>{tbl_pr}{header_row}{body_row}</w:tbl>')
+
+    # Spacer
+    out.append(_para("", space_after=240))
+
+    version = meta.get("version") or "v1.0"
+    date_str = s.get("datum") or meta.get("date") or "[DOPLNIŤ]"
+    prepared = meta.get("prepared_by") or "WAME s.r.o."
+
+    def bold_pair(label: str, value: str) -> str:
+        return (
+            f'<w:r><w:rPr>{font_attr}<w:b/><w:bCs/><w:color w:val="{WAME_NAVY}"/>'
+            '<w:sz w:val="22"/></w:rPr>'
+            f'<w:t xml:space="preserve">{_xml_escape(label)} </w:t></w:r>'
+            f'<w:r><w:rPr>{font_attr}<w:color w:val="{WAME_TEXT}"/><w:sz w:val="22"/></w:rPr>'
+            f'<w:t xml:space="preserve">{_xml_escape(value)}</w:t></w:r>'
+        )
+
+    def green_bullet_run() -> str:
+        return (
+            f'<w:r><w:rPr>{font_attr}<w:b/><w:bCs/><w:color w:val="{WAME_GREEN}"/>'
+            '<w:sz w:val="22"/></w:rPr>'
+            '<w:t xml:space="preserve">  •  </w:t></w:r>'
+        )
+
+    summary_runs = (
+        bold_pair("Verzia dokumentu:", version)
+        + green_bullet_run()
+        + bold_pair("Dátum:", date_str)
+        + green_bullet_run()
+        + bold_pair("Vypracoval:", prepared)
+    )
+    out.append(
+        '<w:p><w:pPr><w:spacing w:before="0" w:after="160"/></w:pPr>'
+        f'{summary_runs}</w:p>'
+    )
 
     return "".join(out)
 
@@ -1375,6 +1747,7 @@ def write_docx(plan: Dict[str, Any], out_path: Path) -> None:
         zf.writestr("word/styles.xml", _styles_xml())
         zf.writestr("word/numbering.xml", NUMBERING_XML)
         zf.writestr("word/settings.xml", SETTINGS_XML)
+        zf.writestr("word/fontTable.xml", FONT_TABLE_XML)
         zf.writestr("word/header1.xml", _header_xml(meta))
         zf.writestr("word/footer1.xml", _footer_xml(meta))
         zf.writestr("docProps/core.xml", _core_xml(meta))

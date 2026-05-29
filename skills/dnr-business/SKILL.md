@@ -20,7 +20,7 @@ Vstupom je **ľubovoľná kombinácia**:
   automaticky doňho zaňhne hlbšie (moduly, Laravel layout, deps).
 
 Výstupom je `.docx` v WAME brand identity (zelená `#20E87A`, navy `#091145`,
-font Inter), s povinnými sekciami a v jazyku klienta.
+font Calibri s Carlito fallback), s povinnými sekciami a v jazyku klienta.
 
 ## Argumenty
 

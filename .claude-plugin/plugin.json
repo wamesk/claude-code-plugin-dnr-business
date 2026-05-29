@@ -1,7 +1,7 @@
 {
   "name": "dnr-business",
-  "version": "1.1.0",
-  "description": "Generate a WAME 'Detailný návrh riešenia' (DNR) — the binding pre-development project document — as a branded .docx. Accepts a folder, file(s), or free-form description as input; if invoked inside an existing project repository, deep-analyses modules/architecture for richer context. Outputs a client-language (sk/cs/en) Word document in WAME visual identity (green #20E87A, navy #091145, Inter font), with mandatory sections (Východiskový stav, Ciele, Popis riešenia, Technické riešenie, Fázy, Riziká, Podmienky).",
+  "version": "1.1.1",
+  "description": "Generate a WAME 'Detailný návrh riešenia' (DNR) — the binding pre-development project document — as a branded .docx. Accepts a folder, file(s), or free-form description as input; if invoked inside an existing project repository, deep-analyses modules/architecture for richer context. Outputs a client-language (sk/cs/en) Word document in WAME visual identity (green #20E87A, navy #091145, Calibri font), with mandatory sections (Východiskový stav, Ciele, Popis riešenia, Technické riešenie, Fázy, Riziká, Podmienky).",
   "author": {
     "name": "Stanislav Červeňák",
     "email": "info@wame.sk"

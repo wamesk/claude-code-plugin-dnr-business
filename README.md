@@ -10,7 +10,7 @@ Po príkaze `/dnr-business <vstup>` sa stane:
 2. **Doplnenie chýbajúcich informácií** — cez `AskUserQuestion` sa pýta len na to čo sa nedá deteguť (klient, typ projektu, biznis cieľ, out of scope, termín).
 3. **Generovanie štruktúrovaného plánu** — Claude vyplní JSON podľa pevnej schémy (12 povinných + 5 voliteľných sekcií). Sekcie *Fázy* a *Riziká* sú schémou vynútené (min. 5 rizík).
 4. **Validácia** — Python validátor v stdlibu prekontroluje JSON; chyby sa fixujú v cykle (max 3 pokusy).
-5. **Render do `.docx`** — stdlib OOXML generátor vyrobí Word dokument s WAME brandingom: zelená `#20E87A`, navy `#091145`, font **Inter**, hlavička s názvom projektu, päta s verziou.
+5. **Render do `.docx`** — stdlib OOXML generátor vyrobí Word dokument s WAME brandingom: zelená `#20E87A`, navy `#091145`, font **Calibri** (Carlito fallback), hlavička s názvom projektu, päta s verziou.
 
 Výstup je hotový dokument pripravený na revíziu — všetky neznáme údaje sú v ňom označené ako `[DOPLNIŤ]` a vypísané do záverečného súhrnu ako otvorené body.
 
@@ -89,10 +89,11 @@ Vždy 12 povinných sekcií, voliteľne 5 ďalších:
 
 `.docx` v jazyku klienta, s plnou diakritikou, vo WAME vizuálnej identite:
 
-- **Farby:** primary `#20E87A` (akcent), `#091145` (navy, nadpisy), `#F4F5F8` (light), `#5C6679` (muted text).
-- **Font:** `Inter` s fallbackom `Calibri`.
-- **Hlavička:** `WAME — Detailný návrh riešenia · <názov> · <klient>` s green underline.
-- **Päta:** `WAME s.r.o. · wame.sk · info@wame.sk · <verzia> · <dátum>`.
+- **Farby:** primary `#20E87A` (akcent), `#091145` (navy, nadpisy), `#EAEEF4` (light, banded rows), `#555555` (muted text).
+- **Font:** `Calibri` (univerzálny Office font) s fallbackom `Carlito` → `Arial` cez `fontTable.xml`.
+- **Hlavička:** `WAME s.r.o.` (navy + green `s.r.o.`) vľavo · `DNR — <title>` vpravo · navy hairline pod.
+- **Päta:** `Dôverné — interný dokument WAME s.r.o. · DNR — <title> · <verzia>` · `Strana X / Y` (auto-update).
+- **Tabuľky:** `WameTable` štýl s banded rows — pri ručnom pridaní riadku v Worde sa banding propaguje.
 
 ## Konfigurácia
 
