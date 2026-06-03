@@ -361,13 +361,49 @@ def _bullet(text: str, level: int = 0) -> str:
     )
 
 
-def _numbered(text: str, level: int = 0) -> str:
-    """Numbered list item (1., 2., 3. ...). Uses numId=2 (decimal numbering)."""
+# --- Numbered list instances ------------------------------------------------
+# Each rendered numbered list gets its own <w:num> instance pointing to the
+# shared decimal abstractNum (abstractNumId=1). Word maintains an independent
+# counter per <w:num>, so every list starts at 1 instead of continuing the
+# global running total. Allocated IDs start at 100 to avoid colliding with the
+# legacy numId=2 (kept as fallback for direct _numbered() callers).
+_NUMBERED_LIST_COUNTER = [99]
+_NUMBERED_LIST_INSTANCES: List[int] = []
+
+
+def _reset_numbered_lists() -> None:
+    """Reset the per-list numbering allocator before building a new document."""
+    _NUMBERED_LIST_COUNTER[0] = 99
+    _NUMBERED_LIST_INSTANCES.clear()
+
+
+def _allocate_numbered_list_id() -> int:
+    """Allocate a fresh numId for one logical numbered list.
+
+    Each list (e.g. one module's `funkcie`, one phase's `vystupy`) gets its own
+    numId so Word restarts the counter at 1 for that list. All allocated IDs
+    are recorded so they can be emitted as <w:num> entries in numbering.xml.
+    """
+    _NUMBERED_LIST_COUNTER[0] += 1
+    new_id = _NUMBERED_LIST_COUNTER[0]
+    _NUMBERED_LIST_INSTANCES.append(new_id)
+    return new_id
+
+
+def _numbered(text: str, level: int = 0, num_id: int = 2) -> str:
+    """Numbered list item (1., 2., 3. ...).
+
+    `num_id` selects which <w:num> instance to reference. Pass a freshly
+    allocated ID via `_allocate_numbered_list_id()` to restart numbering from
+    1 for this list. The default (2) keeps backward compatibility for any
+    direct caller — but new code should go through `_render_list` so that
+    each independent list gets its own restart.
+    """
     safe = _xml_escape(text)
     return (
         '<w:p>'
         f'<w:pPr><w:pStyle w:val="ListBullet"/>'
-        f'<w:numPr><w:ilvl w:val="{level}"/><w:numId w:val="2"/></w:numPr>'
+        f'<w:numPr><w:ilvl w:val="{level}"/><w:numId w:val="{num_id}"/></w:numPr>'
         '</w:pPr>'
         f'<w:r><w:t xml:space="preserve">{safe}</w:t></w:r>'
         '</w:p>'
@@ -377,16 +413,28 @@ def _numbered(text: str, level: int = 0) -> str:
 def _render_list(items: List[Any], numbered: bool = False) -> List[str]:
     """Render a list of items (strings or dicts) as bullets or numbered points.
 
-    If `numbered=True`, items are rendered as 1., 2., 3. — otherwise as bullets.
-    A dict item with `{"text": "...", "level": N}` allows nesting.
+    If `numbered=True`, items are rendered as 1., 2., 3. — and the list gets a
+    freshly allocated numId so numbering restarts at 1 (independently of any
+    other numbered list in the document). A dict item with
+    `{"text": "...", "level": N}` allows nesting; nested items share the same
+    numId so sublevel numbering (a, b, c / i, ii, iii) is consistent.
     """
     out: List[str] = []
-    renderer = _numbered if numbered else _bullet
-    for item in items or []:
-        if isinstance(item, dict):
-            out.append(renderer(item.get("text", ""), level=item.get("level", 0)))
-        else:
-            out.append(renderer(str(item)))
+    if not items:
+        return out
+    if numbered:
+        num_id = _allocate_numbered_list_id()
+        for item in items:
+            if isinstance(item, dict):
+                out.append(_numbered(item.get("text", ""), level=item.get("level", 0), num_id=num_id))
+            else:
+                out.append(_numbered(str(item), num_id=num_id))
+    else:
+        for item in items:
+            if isinstance(item, dict):
+                out.append(_bullet(item.get("text", ""), level=item.get("level", 0)))
+            else:
+                out.append(_bullet(str(item)))
     return out
 
 
@@ -661,7 +709,7 @@ FONT_TABLE_XML = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </w:fonts>
 '''
 
-NUMBERING_XML = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+_NUMBERING_XML_HEADER = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:numbering xmlns:w="{W_NS}">
   <w:abstractNum w:abstractNumId="0">
     <w:nsid w:val="2A5E1B11"/>
@@ -743,10 +791,27 @@ NUMBERING_XML = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
       </w:rPr>
     </w:lvl>
   </w:abstractNum>
-  <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
-  <w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>
-</w:numbering>
 '''
+
+_NUMBERING_XML_FOOTER = '''  <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
+  <w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>
+{extra_nums}</w:numbering>
+'''
+
+
+def _numbering_xml() -> str:
+    """Render numbering.xml with one <w:num> per allocated numbered-list ID.
+
+    The two reserved IDs (numId=1 → bullets, numId=2 → legacy decimal) are
+    always present. Every list registered through `_allocate_numbered_list_id`
+    gets its own <w:num> referencing the same decimal abstractNum, so each
+    list keeps an independent counter and visibly restarts at 1.
+    """
+    extra_nums = "".join(
+        f'  <w:num w:numId="{nid}"><w:abstractNumId w:val="1"/></w:num>\n'
+        for nid in _NUMBERED_LIST_INSTANCES
+    )
+    return _NUMBERING_XML_HEADER + _NUMBERING_XML_FOOTER.format(extra_nums=extra_nums)
 
 
 def _styles_xml() -> str:
@@ -1736,6 +1801,7 @@ def build_document_xml(plan: Dict[str, Any]) -> str:
 
 def write_docx(plan: Dict[str, Any], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    _reset_numbered_lists()
     document_xml = build_document_xml(plan)
     meta = plan.get("meta", {})
     image_rels = [(img["rel_id"], f"media/{img['media_name']}") for img in _IMAGE_REGISTRY]
@@ -1745,7 +1811,7 @@ def write_docx(plan: Dict[str, Any], out_path: Path) -> None:
         zf.writestr("word/document.xml", document_xml)
         zf.writestr("word/_rels/document.xml.rels", _doc_rels_xml(image_rels))
         zf.writestr("word/styles.xml", _styles_xml())
-        zf.writestr("word/numbering.xml", NUMBERING_XML)
+        zf.writestr("word/numbering.xml", _numbering_xml())
         zf.writestr("word/settings.xml", SETTINGS_XML)
         zf.writestr("word/fontTable.xml", FONT_TABLE_XML)
         zf.writestr("word/header1.xml", _header_xml(meta))

@@ -329,6 +329,14 @@ Tieto zoznamy sú **odrážkové** (●):
 Heuristika: **enumerable kroky/výstupy** (kde poradie alebo počet má váhu)
 sú číslované, **kvalitatívne popisy** sú s odrážkami.
 
+**Každý číslovaný zoznam štartuje od 1.** Od verzie 1.1.2 nepokračujú čísla
+naprieč zoznamami: napr. `funkcie` modulu 2 začínajú znova od 1., nie od
+počtu položiek modulu 1. Pod kapotou skript alokuje samostatnú `<w:num>`
+inštanciu (zdieľa rovnaký abstract numFormat) pre každý logický zoznam, takže
+Word udržiava nezávislé počítadlo per-list. Pre sub-položky (nested
+`{"text": "...", "level": 1}` v rámci toho istého zoznamu) sa použije `a)`,
+`b)`, `c)` — ide o pokračujúce číslovanie v rámci toho istého zoznamu.
+
 ## Súvisiace skilly
 
 - `/teamwork-tasks-from-dnr` — z hotového DNR `.docx` vygeneruje Teamwork
