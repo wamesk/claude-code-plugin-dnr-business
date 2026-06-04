@@ -36,6 +36,16 @@ riešenia (DNR)** — záväzný dokument, ktorý predchádza vývoju. Výstupom
    3) Backend & datový model, 4) Frontend & implementácia, 5) Integrácie,
    6) Testovanie, 7) Spustenie & support. Prispôsob projektu.
 
+   **Trvanie počítaj podľa metodiky `## WAME estimate methodology` v
+   `SKILL.md`** — sčítaj minútové odhady jednotlivých úloh fázy (senior +
+   Claude Code, 30–50 % pod ručným odhadom, 15–30 % buffer), priemerne
+   konvertuj na 6 produktívnych hodín/deň a 5 dní/týždeň, výsledok **vždy
+   vyjadri rozsahom** ("3–4 týždne") — jednočíselný odhad nikdy nepíš. Spodná
+   hranica = priamy súčet, horná = +25–35 % rezerva (tá rezerva je viditeľná
+   pre klienta a je pri obhajobe estimácie kľúčová). Úlohy mimo
+   kalibračných kotiev z metodiky uveď v záverečnej sekcii otvorených
+   bodov, nenafukuj ich potichu.
+
 7. **Sekcia Riziká (`rizika`)** je povinná, **minimálne 5–8 položiek**.
    Vždy zahrň aspoň jedno riziko na strane klienta (typicky: omeškanie
    podkladov, neskoré pripomienky) **aj** WAME (typicky: závislosť na

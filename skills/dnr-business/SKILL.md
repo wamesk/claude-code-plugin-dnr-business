@@ -131,6 +131,63 @@ ich vypíš ako otvorené body.
 Argumenty z CLI majú prednosť: `--client="..."`, `--project=eshop`,
 `--lang=sk` preplnia detegované hodnoty.
 
+## WAME estimate methodology
+
+We estimate as senior engineers using Claude Code as a force multiplier.
+
+Baseline assumptions:
+- Engineer is senior in the stack of the current repo
+- Claude Code handles boilerplate / scaffolding / repetitive edits
+- Test scaffolding (Pest/PHPUnit/Vitest/Playwright) is mostly LLM-generated
+- Code review and QA are done by the same engineer (no separate review cycle)
+
+Speedup vs traditional estimate: ~30–50% faster than a hand-written estimate
+without Claude Code. Apply that reduction first.
+
+Buffer policy: after the reduction, add 15–30% buffer for:
+- unknown unknowns (undocumented API, hidden coupling)
+- environment friction (failing CI, flaky local setup)
+- review feedback that costs more than one cycle
+
+The final number must:
+- be a multiple of 15 minutes
+- be at least 15 minutes for trivial tasks (rename, copy edit)
+- be at most 8 hours (480 min) per single task — bigger tasks must be split
+
+Calibration anchors (use as sanity check, not as a lookup table):
+- Single-model CRUD endpoint + Pest test: 60–120 min
+- New Vue component wired to existing API: 60–120 min
+- New module in `wamesk/*` (model + migration + controller + tests): 240–360 min
+- DB schema migration with data backfill: 180–300 min
+- Bugfix from reproducible repro: 60–180 min
+- Bugfix without repro / investigation: 120–360 min
+
+Why this matters: legacy estimates were ~2× too high and made us
+non-competitive. Reducing them manually was the workaround. This methodology
+encodes the same judgement so estimates are aggressive (we beat them in
+practice) yet still include enough buffer to survive surprises.
+
+This block is **byte-identical** with the same section in the
+`teamwork-task-analyze` and `teamwork-tasks-from-dnr` plugins. When updating
+the methodology, change it in all three places.
+
+### Applying this to DNR phase durations
+
+Phase `trvanie` is the sum of per-task estimates (using the rules above)
+rolled up to weeks, then expressed as a range so the buffer stays visible:
+
+- Sum task minutes per phase using the per-task rules above (15-min step,
+  ≤ 480 min per task, anchors as sanity check).
+- Convert to working days at 6 productive hours/day (360 min/day).
+- Convert to working weeks at 5 days/week.
+- Always express as a range whose lower bound is the rolled-up number and
+  upper bound is +25–35% on top — e.g. "3–4 weeks", "6–8 weeks". Never a
+  single number. The range *is* the client-visible buffer.
+- Tasks that fall outside the calibration anchors must be flagged in the
+  follow-up section, not silently expanded.
+
+---
+
 ### Step 7 — Vygeneruj DNR JSON plán
 
 Načítaj inštrukcie z `${PROMPT_DIR}/extract_inputs_to_json.md` a schému z

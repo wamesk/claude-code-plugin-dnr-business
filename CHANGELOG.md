@@ -5,6 +5,42 @@ All notable changes to the `dnr-business` plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-06-04
+
+### Added
+- **WAME estimate methodology** is now documented as an explicit
+  `## WAME estimate methodology` H2 block in `SKILL.md`, placed before
+  Step 7 (the DNR JSON extraction step). It defines the senior-engineer +
+  Claude Code model: per-task estimates are 30–50% lower than legacy
+  hand-written ones, padded with a 15–30% buffer for risk, capped at 480 min
+  per task and rounded to 15-min steps. Six calibration anchors (CRUD
+  endpoint, Vue component, new `wamesk/*` module, schema migration, bugfix
+  with repro, bugfix without repro) are listed as sanity checks.
+- The same block is byte-identical with the corresponding section in the
+  `teamwork-task-analyze` v1.0.0 and `teamwork-tasks-from-dnr` v1.2.0
+  plugins — one source of truth, three places to keep in sync.
+- New derived sub-block `### Applying this to DNR phase durations`
+  immediately after the methodology, which maps the per-task minute
+  estimates onto **phase** `trvanie`: sum task minutes per phase, convert
+  at 6 productive hours/day × 5 days/week, and **always express as a range**
+  (e.g. "3–4 weeks") with the upper bound +25–35% above the rolled-up
+  lower bound. The range itself is the client-visible buffer — single-number
+  durations are explicitly forbidden.
+- `prompts/extract_inputs_to_json.md` rule 6 ("Sekcia Fázy") now references
+  the methodology and the derived phase-duration rules, so the LLM
+  extraction produces ranges that are reproducible across runs and across
+  engineers.
+
+### Changed
+- No JSON schema change — `trvanie` remains a free-form string. The
+  methodology only constrains **how** the model writes the string, not the
+  contract.
+- Rationale captured directly in SKILL.md: legacy estimates were ~2× too
+  high and not competitive; manual reductions were the workaround. The
+  methodology encodes the same judgement so two analysts produce the same
+  range for the same scope and so the client always sees the buffer
+  baked into the dates.
+
 ## [1.1.2] — 2026-06-03
 
 Fix runaway numbering across independent lists.
