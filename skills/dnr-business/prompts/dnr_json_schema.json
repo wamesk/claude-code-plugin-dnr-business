@@ -199,8 +199,8 @@
         "required": ["riziko", "dopad", "pravdepodobnost", "prevencia"],
         "properties": {
           "riziko": {"type": "string"},
-          "dopad": {"type": "string", "enum": ["nizky", "stredny", "vysoky"]},
-          "pravdepodobnost": {"type": "string", "enum": ["nizka", "stredna", "vysoka"]},
+          "dopad": {"type": "string", "enum": ["nízky", "stredný", "vysoký"]},
+          "pravdepodobnost": {"type": "string", "enum": ["nízka", "stredná", "vysoká"]},
           "prevencia": {"type": "string"}
         }
       }

@@ -5,6 +5,21 @@ All notable changes to the `dnr-business` plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] — 2026-06-11
+
+### Fixed
+- **Risk-level enum mismatch that failed JSON validation on nearly every
+  run.** The schema in `prompts/dnr_json_schema.json` defined the `rizika[]`
+  `dopad` and `pravdepodobnost` enums in ASCII (`nizky`/`stredny`/`vysoky`,
+  `nizka`/`stredna`/`vysoka`), while the extraction prompt
+  (`prompts/extract_inputs_to_json.md`) and the global "keep diacritics" rule
+  steer the model to emit the diacritic forms (`nízky`/`stredný`/`vysoký`,
+  `nízka`/`stredná`/`vysoká`). The unconditional enum validator in
+  `scripts/dnr_to_docx.py` then rejected the valid output. The schema enums
+  now use the diacritic forms, matching the prompt and the diacritics rule.
+  The docx renderer prints the risk values verbatim, so the table output maps
+  correctly without further changes.
+
 ## [1.2.0] — 2026-06-04
 
 ### Added
@@ -150,6 +165,7 @@ Initial release.
 - Input reader for `.docx` / `.md` / `.txt` / `.pdf`, repo deep-scan helper,
   JSON validator, and per-project config init.
 
+[1.2.1]: https://github.com/wamesk/claude-code-plugin-dnr-business/releases/tag/v1.2.1
 [1.1.2]: https://github.com/wamesk/claude-code-plugin-dnr-business/releases/tag/v1.1.2
 [1.1.1]: https://github.com/wamesk/claude-code-plugin-dnr-business/releases/tag/v1.1.1
 [1.1.0]: https://github.com/wamesk/claude-code-plugin-dnr-business/releases/tag/v1.1.0
