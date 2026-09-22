@@ -5,6 +5,55 @@ All notable changes to the `dnr-business` plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-09-22
+
+### Changed
+- **Estimate methodology replaced — `wame-estimate-v2`.** The old rule produced a
+  "traditional" estimate, cut it by 30–50 % for Claude Code, then added a 15–30 %
+  buffer on top. Two percentages stacked on a guess give a 0.58×–0.91× band on
+  every task, so the same work could legitimately be quoted at 60 or at 95
+  minutes and the wider end always won the argument. The methodology now
+  estimates **one number directly** against a table of finished-outcome anchors.
+  The anchors are tighter (a single figure each, adjust by at most one 15-minute
+  step) and the block states explicitly what the number covers — reproduce,
+  implement, test, run the suite, self-review, one review round — and what it
+  never covers: deployment, production data fixes, client communication, and any
+  work behind an unanswered `[OTVORENÉ]` question.
+- **Uncertainty is now an open question, not a surcharge.** Where the old text
+  told you to pad for "unknown unknowns", the new one tells you to write the
+  question into the task, estimate the investigation that answers it, and state
+  what the fix costs under each answer.
+- **The 240-minute split threshold is now named as the working ceiling**, so it
+  no longer contradicts the 480-minute hard cap sitting in the same paragraph.
+- The methodology block is byte-identical across `teamwork-task-analyze`,
+  `teamwork-tasks-from-dnr`, `teamwork-tasks-from-desk`,
+  `teamwork-tasks-from-session` and `dnr-business`, and now carries a version
+  marker so a drifted copy is visible.
+
+### Fixed
+- **The client-facing phase duration was padded three times over.** Per-task
+  minutes already carried the old 30–50 % cut and 15–30 % buffer; the phase
+  roll-up then added a further **+25–35 %** as the upper bound of the published
+  range. A duration shown to a client could therefore land *above* a plain
+  hand-written estimate — the exact outcome the methodology exists to prevent.
+  The flat percentage is gone. The lower bound is the rolled-up figure rounded up
+  to whole weeks; the upper bound adds the estimated minutes of the work that is
+  **not decided yet** — every open question, every `[DOPLNIŤ]`, every client-side
+  dependency in that phase — rounded up again. The gap between the two numbers is
+  now a thing you can point at in a meeting.
+- A phase with no open items still publishes a two-number range one week wide.
+  Whole-week rounding is itself an honest ±1 week, and a single week number
+  claims a precision nobody has.
+- `prompts/extract_inputs_to_json.md` carried the same chain in Slovak and is
+  updated to match.
+
+### Removed
+- The flat +25–35 % phase reserve, and the config keys `estimate.buffer_pct_min`, `estimate.buffer_pct_max`,
+  `estimate.speedup_pct_min` and `estimate.speedup_pct_max`. The config
+  migration deletes them from files written by earlier versions and renames
+  `methodology` from `wame_senior_claude_code` to `wame_estimate_v2` — a stale
+  `buffer_pct_max` left in the file reads like a rule somebody still follows.
+
 ## [1.2.1] — 2026-06-11
 
 ### Fixed

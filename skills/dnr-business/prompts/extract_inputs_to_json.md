@@ -37,14 +37,22 @@ riešenia (DNR)** — záväzný dokument, ktorý predchádza vývoju. Výstupom
    6) Testovanie, 7) Spustenie & support. Prispôsob projektu.
 
    **Trvanie počítaj podľa metodiky `## WAME estimate methodology` v
-   `SKILL.md`** — sčítaj minútové odhady jednotlivých úloh fázy (senior +
-   Claude Code, 30–50 % pod ručným odhadom, 15–30 % buffer), priemerne
-   konvertuj na 6 produktívnych hodín/deň a 5 dní/týždeň, výsledok **vždy
-   vyjadri rozsahom** ("3–4 týždne") — jednočíselný odhad nikdy nepíš. Spodná
-   hranica = priamy súčet, horná = +25–35 % rezerva (tá rezerva je viditeľná
-   pre klienta a je pri obhajobe estimácie kľúčová). Úlohy mimo
-   kalibračných kotiev z metodiky uveď v záverečnej sekcii otvorených
-   bodov, nenafukuj ich potichu.
+   `SKILL.md`** — každú úlohu fázy odhadni jedným číslom podľa kotiev
+   (senior developer + Claude Code, 15-minútový krok, žiadne percentuálne
+   koeficienty), minúty sčítaj, konvertuj na 6 produktívnych hodín/deň a
+   5 dní/týždeň a **zaokrúhli nahor na celé týždne** — to je spodná hranica.
+   Hornú hranicu dostaneš tak, že k nej pripočítaš odhad práce, ktorá ešte
+   nie je rozhodnutá: každú otvorenú otázku, každé `[DOPLNIŤ]` a každú
+   závislosť na strane klienta v tejto fáze; potom opäť zaokrúhli nahor na
+   celé týždne. Výsledok **vždy vyjadri rozsahom** ("3–4 týždne") — jednočíselný
+   odhad nikdy nepíš, aj keď fáza nemá otvorené body (vtedy je rozsah široký
+   jeden týždeň, čo je poctivá presnosť zaokrúhľovania).
+
+   **Nikdy nepripočítavaj plošnú percentuálnu rezervu.** Verzia 1.2.x hovorila
+   pripočítať 25–35 % — spolu s vtedajším reťazcom „zrýchlenie + buffer" to
+   vedelo vyrobiť klientske trvanie vyššie než obyčajný ručný odhad. Úlohy mimo
+   kalibračných kotiev uveď menovite v záverečnej sekcii otvorených bodov,
+   nenafukuj ich potichu.
 
 7. **Sekcia Riziká (`rizika`)** je povinná, **minimálne 5–8 položiek**.
    Vždy zahrň aspoň jedno riziko na strane klienta (typicky: omeškanie

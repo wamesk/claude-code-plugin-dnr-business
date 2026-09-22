@@ -133,58 +133,111 @@ Argumenty z CLI majú prednosť: `--client="..."`, `--project=eshop`,
 
 ## WAME estimate methodology
 
-We estimate as senior engineers using Claude Code as a force multiplier.
+> Block version `wame-estimate-v2`. Shared **verbatim** across the plugins
+> `teamwork-task-analyze`, `teamwork-tasks-from-dnr`, `teamwork-tasks-from-desk`,
+> `teamwork-tasks-from-session` and `dnr-business`. Change it in all five or in
+> none — a per-plugin variant is how two skills start quoting different numbers
+> for the same task.
 
-Baseline assumptions:
-- Engineer is senior in the stack of the current repo
-- Claude Code handles boilerplate / scaffolding / repetitive edits
-- Test scaffolding (Pest/PHPUnit/Vitest/Playwright) is mostly LLM-generated
-- Code review and QA are done by the same engineer (no separate review cycle)
+**Estimate one number, directly.** Do not produce a "traditional" estimate and
+then multiply it by a speedup and a buffer. Two percentages stacked on a guess
+open a band almost twice as wide as the guess itself, and in a negotiation the
+widest end of that band always wins. Name the minutes the work takes and defend
+that number.
 
-Speedup vs traditional estimate: ~30–50% faster than a hand-written estimate
-without Claude Code. Apply that reduction first.
+**Who does the work.** A senior engineer who already knows this codebase,
+directing Claude Code. Claude Code writes the implementation and the tests; the
+engineer decides, reviews and runs the suite. There is no separate QA pass and
+no handover to a second person.
 
-Buffer policy: after the reduction, add 15–30% buffer for:
-- unknown unknowns (undocumented API, hidden coupling)
-- environment friction (failing CI, flaky local setup)
-- review feedback that costs more than one cycle
+**What the number covers**
 
-The final number must:
-- be a multiple of 15 minutes
-- be at least 15 minutes for trivial tasks (rename, copy edit)
-- be at most 8 hours (480 min) per single task — bigger tasks must be split
+- Reading the relevant code and reproducing the reported behaviour
+- The implementation itself
+- Writing or extending the test, and running the affected tests
+- Self-review and the fixes it produces
+- One round of review feedback
 
-Calibration anchors (use as sanity check, not as a lookup table):
-- Single-model CRUD endpoint + Pest test: 60–120 min
-- New Vue component wired to existing API: 60–120 min
-- New module in `wamesk/*` (model + migration + controller + tests): 240–360 min
-- DB schema migration with data backfill: 180–300 min
-- Bugfix from reproducible repro: 60–180 min
-- Bugfix without repro / investigation: 120–360 min
+**What the number never covers** — estimate each of these as its own task instead
+of folding it in
 
-Why this matters: legacy estimates were ~2× too high and made us
-non-competitive. Reducing them manually was the workaround. This methodology
-encodes the same judgement so estimates are aggressive (we beat them in
-practice) yet still include enough buffer to survive surprises.
+- Deployment, running the migration on production, fixing production data
+- Talking to the client or the PO, and waiting for the answer
+- Any work that sits behind an unanswered `[OTVORENÉ]` question
+- Anything the task itself declares out of scope
 
-This block is **byte-identical** with the same section in the
-`teamwork-task-analyze` and `teamwork-tasks-from-dnr` plugins. When updating
-the methodology, change it in all three places.
+**Shape of the number**
+
+- A multiple of 15 minutes. Never below 15.
+- Above 240 minutes: propose a split into 2–6 atomic subtasks. That threshold is
+  `propose_split_threshold_minutes` and it is the real ceiling in daily use.
+- 480 minutes is a hard cap. Work that will not fit under it is not a task yet.
+
+**Anchors.** These are finished outcomes, not categories of feeling. Pick the
+closest line and move by at most one 15-minute step. If the number you want is
+more than one step away from every anchor, write down in the reasoning what makes
+this case different — that sentence is what a reviewer checks.
+
+| Finished work | Minutes |
+|---|---|
+| Text, label, translation key or config value, plus the test that guards it | 15 |
+| One field, filter or validation rule on one screen, plus a test | 30 |
+| Bug with a stack trace or a one-line repro: fix plus regression test | 60 |
+| Vue/React component wired to an API that already exists, plus a test | 90 |
+| Bug that reproduces but spans 2–3 layers: fix plus tests | 120 |
+| One CRUD endpoint or one screen end to end, plus tests | 120 |
+| Bug with no repro yet: investigate, then fix | 180 |
+| Schema migration with a data backfill and a copy-back assertion | 180 |
+| New module in `wamesk/*` (model, migration, Nova screen, policy, tests) | 300 |
+
+**Uncertainty is an open question, not a surcharge.** When you cannot size the
+work, you have found something the task does not say yet. Write that question
+into the task, estimate the investigation that answers it, and state in the
+reasoning what the fix costs under each likely answer. A number with a written
+assumption survives review. A number padded for "unknown unknowns" does not, and
+it hides the question that was worth asking.
+
+**Do not pad a task because it is labelled TBD**, and do not shrink a real
+multi-layer bug so the list looks cheap. Both errors cost the same trust.
+
+**Why this replaced the old rule.** Hand-written estimates used to run about
+twice the real cost, which lost us work we should have won. The first fix was a
+30–50 % speedup factor with a 15–30 % buffer on top — but that chain put the
+padding straight back while sounding rigorous, and it produced a 0.58×–0.91×
+band on every single task. The anchors above carry the same judgement as one
+number. The measured feedback loop is the `teamwork-tasks-from-session` plugin,
+which shows the methodology estimate and the real logged session time side by
+side. When those two drift apart on the same kind of work, change the anchors
+here — never re-introduce a buffer percentage.
 
 ### Applying this to DNR phase durations
 
-Phase `trvanie` is the sum of per-task estimates (using the rules above)
-rolled up to weeks, then expressed as a range so the buffer stays visible:
+Phase `trvanie` is the sum of the per-task estimates above, rolled up to weeks
+and written as a range. The range must come from something the DNR can name.
 
-- Sum task minutes per phase using the per-task rules above (15-min step,
-  ≤ 480 min per task, anchors as sanity check).
-- Convert to working days at 6 productive hours/day (360 min/day).
-- Convert to working weeks at 5 days/week.
-- Always express as a range whose lower bound is the rolled-up number and
-  upper bound is +25–35% on top — e.g. "3–4 weeks", "6–8 weeks". Never a
-  single number. The range *is* the client-visible buffer.
-- Tasks that fall outside the calibration anchors must be flagged in the
-  follow-up section, not silently expanded.
+- Sum the task minutes in the phase using the rules above (15-minute step,
+  ≤ 480 min per task, anchors as the sanity check).
+- Convert to working days at 6 productive hours per day (360 min/day).
+- Convert to working weeks at 5 days per week, rounded **up** to whole weeks.
+  That is the lower bound.
+- The upper bound is the lower bound **plus the work that is not decided yet**:
+  add the estimated minutes of every open question, every `[DOPLNIŤ]` item and
+  every client-side dependency that sits in this phase, then round up to whole
+  weeks again. The gap between the two numbers is then a thing you can point at
+  in a meeting.
+- When a phase has no open items, the range is still two numbers, one week
+  apart — whole-week rounding is itself an honest ±1 week. Never publish a
+  single week number; it claims a precision nobody has.
+
+**Do not add a flat percentage on top.** Version 1.2.x told you to add 25–35 %
+to the rolled-up figure. Together with the speedup-and-buffer chain the old
+methodology used, a client-facing duration could land *above* a plain
+hand-written estimate — the exact outcome the methodology was written to stop.
+The per-task numbers already carry their own judgement; padding them a second
+time at the phase level is padding the same risk twice.
+
+Tasks that fall outside the calibration anchors go in the follow-up section by
+name. Never widen a phase quietly to cover them.
 
 ---
 
