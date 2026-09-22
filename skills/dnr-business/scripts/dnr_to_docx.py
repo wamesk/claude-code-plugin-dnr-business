@@ -1039,6 +1039,11 @@ def _core_xml(meta: Dict[str, Any]) -> str:
 
 
 _IMAGE_REGISTRY: List[Dict[str, Any]] = []
+# Images the client supplied that did not make it into the document. Never let one
+# of these pass in silence: a dropped screenshot looks identical to a document that
+# never had one.
+_IMAGE_DROPS: List[str] = []
+_IMAGE_BROKEN: List[str] = []
 _REL_ID_COUNTER = [7]  # next free rId (rId1–6 are reserved for styles/numbering/settings/header/footer/fontTable)
 
 
@@ -1376,6 +1381,12 @@ def _build_popis(s: Dict[str, Any]) -> str:
                     reg["rel_id"], reg["width_emu"], reg["height_emu"],
                     caption=mod.get("obrazok_popis") or mod.get("image_caption"),
                 ))
+            else:
+                # A client screenshot that cannot be registered (file gone, or an
+                # extension outside the allow-list — Word's own word/media/ routinely
+                # holds .emf/.wmf/.webp/.bmp) used to vanish together with its caption
+                # while --build still printed {"ok": true}. Say it out loud instead.
+                _IMAGE_DROPS.append(str(img))
         elif mod.get("wireframe"):
             wf = mod["wireframe"]
             out.append(_wireframe_placeholder(
@@ -1823,8 +1834,11 @@ def write_docx(plan: Dict[str, Any], out_path: Path) -> None:
             try:
                 data = Path(img["src_path"]).read_bytes()
                 zf.writestr(f"word/media/{img['media_name']}", data)
-            except OSError:
-                pass
+            except OSError as exc:
+                # The relationship and the <w:drawing> are already in document.xml, so
+                # skipping the binary leaves a dangling rId and Word offers to repair
+                # the file. That is a broken document, not a missing picture.
+                _IMAGE_BROKEN.append(f"{img['src_path']}: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -1913,7 +1927,22 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 1
         out = Path(args.output_path).expanduser().resolve()
         write_docx(plan, out)
-        print(json.dumps({"ok": True, "output": str(out)}, indent=2, ensure_ascii=False))
+        if _IMAGE_DROPS:
+            print("⚠ obrázky, ktoré sa do dokumentu nedostali:", file=sys.stderr)
+            for src in _IMAGE_DROPS:
+                print(f"   - {src}", file=sys.stderr)
+        for src in _IMAGE_BROKEN:
+            print(f"✗ obrázok registrovaný, ale nezapísaný: {src}", file=sys.stderr)
+        print(json.dumps({
+            "ok": not _IMAGE_BROKEN,
+            "output": str(out),
+            "image_warnings": _IMAGE_DROPS,
+            "image_errors": _IMAGE_BROKEN,
+        }, indent=2, ensure_ascii=False))
+        if _IMAGE_BROKEN:
+            # A dangling rId makes Word prompt to repair the file — that is a failure,
+            # not a warning. A merely missing source is reported and tolerated.
+            return 1
         return 0
 
     parser.print_help()

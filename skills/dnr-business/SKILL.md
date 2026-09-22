@@ -292,6 +292,12 @@ alebo extrahované z `.docx`):
    }
    ```
 
+**Obrázky skopíruj vedľa výstupného dokumentu, nenechávaj ich v `/tmp`.** Plán je
+trvalý artefakt — `--from-json` z neho rendruje znova aj o mesiac — ale `/tmp` sa
+vyprázdni. Cesta v `obrazok`, ktorá už neexistuje, prejde cez `register_image()`
+ako `None` a obrázok aj s popisom z dokumentu ticho vypadne. Presuň ich do
+`<output_dir>/images/` a v pláne uveď tú cestu.
+
 **Ak obrázky nie sú dostupné, ale wireframe by bol vhodný** (typicky pre nové
 UI obrazovky, nové user flows, dôležité formuláre), pridaj `wireframe` blok
 namiesto `obrazok`:
@@ -345,6 +351,21 @@ Ak používateľ poslal `--dry-run`, ulož len `plan.json` (vedľa output cesty)
 a stop.
 
 ### Step 9 — Render do .docx
+
+**Existujúci dokument nikdy neprepíš.** `--build` otvára výstupný súbor v režime
+`"w"` (`write_docx()` → `zipfile.ZipFile(out_path, "w")`), takže čokoľvek na tej
+ceste zmaže celé — vrátane ručne doplnených `[DOPLNIŤ]` položiek, vložených
+screenshotov a poznámok, ktoré do `.docx` pridal človek po predchádzajúcom behu.
+Step 10 pritom presne to odporúča, takže druhý beh nad tou istou cestou je bežný
+scenár, nie výnimka. Pred renderom over:
+
+```bash
+test -e "<output_path>" && echo EXISTS || echo FREE
+```
+
+Ak vypíše `EXISTS`, **nerenderuj**. Cez `AskUserQuestion` sa opýtaj, či má nová
+verzia ísť vedľa (`DNR_v1.1.docx` — odporúčané), alebo sa má pôvodný súbor
+prepísať; prepíš len na výslovné potvrdenie.
 
 ```bash
 python3 "$SCRIPT" --build --json /tmp/dnr_plan.json --output "<output_path>"

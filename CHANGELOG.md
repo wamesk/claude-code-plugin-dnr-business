@@ -5,6 +5,33 @@ All notable changes to the `dnr-business` plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] — 2026-09-22
+
+### Fixed
+- **Client screenshots disappeared from the DNR without a word.** `register_image()`
+  returns `None` for a missing file or any extension outside `{png,jpg,jpeg,gif,svg}`,
+  and the caller simply skipped the paragraph — so the image **and its caption** vanished
+  while `--build` still printed `{"ok": true}`. Step 7.5 tells the model to unzip
+  `word/media/*` out of the client's own `.docx`, and Word's media folder routinely holds
+  `.emf`, `.wmf`, `.webp` and `.bmp`. Dropped images are now collected and reported on
+  stderr and in the JSON as `image_warnings`.
+- **A second path produced a document Word offers to repair.** `write_docx()` caught
+  `OSError` and passed when copying an image binary into `word/media/`, but the
+  relationship and the `<w:drawing>` were already committed to `word/document.xml` — so
+  the result was a dangling rId, reported as success. Those are now `image_errors`, and
+  `--build` exits non-zero: a corrupt document is a failure, a missing picture is a
+  warning.
+- Step 9 gained a render gate for a neighbouring loss: `--build` opens the output path
+  with `zipfile.ZipFile(out_path, "w")`, so a second run wipes whatever a human added to
+  the previous `.docx` — filled-in `[DOPLNIŤ]` items, pasted screenshots, notes. Step 10
+  recommends exactly that second run, so it is the normal case, not an edge one. The
+  skill now checks for an existing file and asks before overwriting it.
+
+### Changed
+- Images extracted to `/tmp/dnr_images/` are referenced by absolute path in the durable
+  plan, so a later `--from-json` re-render silently loses every one of them once `/tmp`
+  is swept. Called out where the extraction is described.
+
 ## [1.3.0] — 2026-09-22
 
 ### Changed
