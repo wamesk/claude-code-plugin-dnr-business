@@ -5,6 +5,32 @@ All notable changes to the `dnr-business` plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] — 2026-10-12
+
+### Changed
+- **Numbered items are numbered by section.** A point under `4.2 …` now reads `4.2.3`,
+  a goal under `3.1 Biznis ciele` reads `3.1.2`, a phase output `9.1.4`; a nested
+  `{"text", "level": 1}` item adds one more level (`4.2.3.1`). The numbers are written
+  as text, so every viewer shows the same thing and a point can be quoted in a meeting
+  („otázka 1.2.3"). Sub-headings that carried a list but no number got one
+  (`4.N+1 Sitemap`, `4.N+2 User flows`, `6.1`–`6.3`, `11.1`–`11.3`).
+- New optional `uvod.zoznam`: a numbered, nestable list rendered right after the intro —
+  the place for open questions a reader wants first. Groups become `1.1`, `1.2`, the
+  questions under them `1.1.1`, `1.1.2`.
+- Step 1 prefers the installed plugin's own script. The old `find … -print -quit` was
+  happy to pick a stale copy the desktop app had synced (a 1.2.1 build next to the
+  installed 1.4.0).
+
+### Fixed
+- **Word showed one continuous list (1…112) across the whole document.** 1.1.2 gave
+  every list its own `<w:num>` instance and trusted Word to restart the counter. Word
+  does not: instances that share an abstractNum continue the count unless each carries
+  a `<w:lvlOverride>/<w:startOverride>`. LibreOffice restarts them, which is why the fix
+  looked right in review. Literal numbers remove the dependency on either behaviour.
+- `--validate` rejected the nested `{"text", "level"}` list items the renderer has
+  accepted since 1.1.2 (`expected string, got dict`). The validator now understands
+  `"type": ["string", "object"]`, and the schema uses it for every numbered list.
+
 ## [1.4.0] — 2026-09-22
 
 ### Fixed

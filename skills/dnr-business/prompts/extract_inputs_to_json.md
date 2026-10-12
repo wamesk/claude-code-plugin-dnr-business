@@ -67,6 +67,15 @@ riešenia (DNR)** — záväzný dokument, ktorý predchádza vývoju. Výstupom
 9. **Verzia** dokumentu začína `v1.0`. Pri následnej revízii zvýš na `v1.1`,
    `v2.0` atď.
 
+10. **Číslovanie bodov robí skript, nie ty.** Každý číslovaný bod dostane číslo
+    podľa sekcie (`3.1.2`, `4.2.3`, `9.1.4`), vnorená položka
+    `{"text": "...", "level": 1}` o úroveň viac (`4.2.3.1`). Do textu položky preto
+    nepíš poradové čísla ani písmená skupín. Ak chce používateľ otvorené otázky
+    alebo rozhodnutia hneď na začiatku dokumentu, daj ich do `uvod.zoznam`:
+    skupina `{"text": "Fakturácia a doklady", "level": 0}` → `1.1`, otázka
+    `{"text": "...", "level": 1}` → `1.1.1`. Na body sa v moduloch, fázach a
+    rizikách odkazuj týmto číslom („otázka 1.2.3").
+
 ## Vstupy ktoré dostaneš
 
 Skill ti predloží jeden alebo viac z nasledujúcich vstupov:

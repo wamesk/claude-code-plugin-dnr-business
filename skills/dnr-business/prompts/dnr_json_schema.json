@@ -47,7 +47,12 @@
       "type": "object",
       "required": ["text"],
       "properties": {
-        "text": {"type": "string", "description": "Co je DNR, na co sluzi, co sa od klienta ocakava (schvalenie)."}
+        "text": {"type": "string", "description": "Co je DNR, na co sluzi, co sa od klienta ocakava (schvalenie)."},
+        "zoznam": {
+          "type": "array",
+          "description": "Volitelny cislovany zoznam hned za uvodnym textom (napr. otvorene otazky, ktore ma citatel vidiet ako prve). Polozka je string alebo {text, level}: level 0 = skupina (1.1), level 1 = bod skupiny (1.1.1). Bez vlastnych poradovych cisel v texte.",
+          "items": {"type": ["string", "object"], "properties": {"text": {"type": "string"}, "level": {"type": "integer"}}}
+        }
       }
     },
     "vychodiskovy_stav": {
@@ -62,9 +67,9 @@
       "type": "object",
       "required": ["biznis", "technicke", "out_of_scope"],
       "properties": {
-        "biznis": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-        "technicke": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-        "out_of_scope": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+        "biznis": {"type": "array", "items": {"type": ["string", "object"]}, "minItems": 1},
+        "technicke": {"type": "array", "items": {"type": ["string", "object"]}, "minItems": 1},
+        "out_of_scope": {"type": "array", "items": {"type": ["string", "object"]}, "minItems": 1}
       }
     },
     "popis_riesenia": {
@@ -81,7 +86,7 @@
             "properties": {
               "nazov": {"type": "string"},
               "popis": {"type": "string", "description": "Co robi a preco je dolezity pre biznis klienta."},
-              "funkcie": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+              "funkcie": {"type": "array", "items": {"type": ["string", "object"]}, "minItems": 1},
               "priklady": {"type": "array", "items": {"type": "string"}},
               "obrazok": {"type": "string", "description": "Cesta k súboru obrázka/screenshotu (PNG/JPG) z podkladov klienta — bude vložený pod popis modulu."},
               "obrazok_popis": {"type": "string", "description": "Popisok pod obrázok."},
@@ -97,8 +102,8 @@
             }
           }
         },
-        "sitemap": {"type": "array", "items": {"type": "string"}},
-        "user_flows": {"type": "array", "items": {"type": "string"}}
+        "sitemap": {"type": "array", "items": {"type": ["string", "object"]}},
+        "user_flows": {"type": "array", "items": {"type": ["string", "object"]}}
       }
     },
     "pouzivatelske_roly": {
@@ -178,7 +183,7 @@
         "properties": {
           "nazov": {"type": "string"},
           "popis": {"type": "string"},
-          "vystupy": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+          "vystupy": {"type": "array", "items": {"type": ["string", "object"]}, "minItems": 1},
           "trvanie": {"type": "string"},
           "zodpovednost": {
             "type": "object",

@@ -231,7 +231,12 @@ def scan_repo(root: Path) -> Dict[str, Any]:
 # JSON schema validation (minimal, no jsonschema dep)
 # ---------------------------------------------------------------------------
 
-def _type_ok(value: Any, expected: str) -> bool:
+def _type_ok(value: Any, expected: Any) -> bool:
+    if isinstance(expected, list):
+        # JSON Schema allows a list of types. The renderer has accepted nested
+        # list items as either a string or a {"text", "level"} object since
+        # 1.1.2; the validator rejected the object form until 1.5.0.
+        return any(_type_ok(value, one) for one in expected)
     return {
         "string": isinstance(value, str),
         "integer": isinstance(value, int) and not isinstance(value, bool),
@@ -345,6 +350,16 @@ def _body_para(text: str, *, justify: bool = False) -> str:
 
 
 def _heading(text: str, level: int = 1) -> str:
+    """Heading paragraph.
+
+    A leading dotted number ("4.2 Nástenka", "9 — Fázy") becomes the numbering
+    context for every numbered list item that follows, until the next numbered
+    heading. Unnumbered headings ("Kľúčové funkcie", "Výstupy") keep the
+    context of their parent, so the items under them read 4.2.1, 4.2.2 …
+    """
+    match = _HEADING_NUMBER_RE.match(text)
+    if match:
+        _set_numbering_context(match.group(1))
     style = {1: "Heading1", 2: "Heading2", 3: "Heading3"}.get(level, "Heading1")
     return _para(text, style=style)
 
@@ -361,51 +376,74 @@ def _bullet(text: str, level: int = 0) -> str:
     )
 
 
-# --- Numbered list instances ------------------------------------------------
-# Each rendered numbered list gets its own <w:num> instance pointing to the
-# shared decimal abstractNum (abstractNumId=1). Word maintains an independent
-# counter per <w:num>, so every list starts at 1 instead of continuing the
-# global running total. Allocated IDs start at 100 to avoid colliding with the
-# legacy numId=2 (kept as fallback for direct _numbered() callers).
-_NUMBERED_LIST_COUNTER = [99]
-_NUMBERED_LIST_INSTANCES: List[int] = []
+# --- Hierarchical numbering ---------------------------------------------------
+# Numbered items carry a literal section-based number ("4.2.3") instead of a
+# Word <w:numPr> counter, for two reasons. Word does not restart a <w:num>
+# instance that shares its abstractNum with the previous one unless every
+# instance also carries a <w:lvlOverride>/<w:startOverride>, so the per-list
+# instances introduced in 1.1.2 rendered as one continuous 1…N list in Word
+# (LibreOffice restarts them, which is why review copies looked right). And a
+# flat "3." under heading 4.2 does not say where it lives — "4.2.3" does, and
+# it can be quoted in a meeting. The context is the number of the nearest
+# numbered heading (see `_heading`); counters continue across lists under the
+# same heading, so every number is unique within the document.
+_HEADING_NUMBER_RE = re.compile(r"^(\d+(?:\.\d+)*)\s")
+_NUMBERING_CTX: List[str] = ["0"]
+_NUMBERING_COUNTERS: List[int] = []
+
+# Indents in twips. Level-0 text starts 1.5 cm in (room for "10.12.10" in the
+# hanging part); every nested level moves another 1 cm to the right.
+_LIST_NUMBER_INDENT = 851
+_LIST_LEVEL_STEP = 567
 
 
-def _reset_numbered_lists() -> None:
-    """Reset the per-list numbering allocator before building a new document."""
-    _NUMBERED_LIST_COUNTER[0] = 99
-    _NUMBERED_LIST_INSTANCES.clear()
+def _reset_numbering() -> None:
+    """Reset the heading context and counters before building a new document."""
+    _NUMBERING_CTX[0] = "0"
+    _NUMBERING_COUNTERS.clear()
 
 
-def _allocate_numbered_list_id() -> int:
-    """Allocate a fresh numId for one logical numbered list.
+def _set_numbering_context(number: str) -> None:
+    """Start numbering under heading `number` ("4.2"): items become 4.2.1, 4.2.2 …"""
+    _NUMBERING_CTX[0] = number
+    _NUMBERING_COUNTERS.clear()
 
-    Each list (e.g. one module's `funkcie`, one phase's `vystupy`) gets its own
-    numId so Word restarts the counter at 1 for that list. All allocated IDs
-    are recorded so they can be emitted as <w:num> entries in numbering.xml.
+
+def _next_number(level: int = 0) -> Tuple[str, int]:
+    """Advance the counter at `level`; return the dotted number and the level used.
+
+    Level 0 under heading 4.2 gives 4.2.1, 4.2.2 …; a level-1 item after 4.2.2
+    gives 4.2.2.1. Deeper counters reset whenever a shallower item appears. A
+    nested item with no parent yet is numbered one level up instead of
+    producing "4.2.0.1".
     """
-    _NUMBERED_LIST_COUNTER[0] += 1
-    new_id = _NUMBERED_LIST_COUNTER[0]
-    _NUMBERED_LIST_INSTANCES.append(new_id)
-    return new_id
+    level = max(0, min(level, len(_NUMBERING_COUNTERS)))
+    if level == len(_NUMBERING_COUNTERS):
+        _NUMBERING_COUNTERS.append(0)
+    _NUMBERING_COUNTERS[level] += 1
+    del _NUMBERING_COUNTERS[level + 1:]
+    number = ".".join([_NUMBERING_CTX[0], *(str(n) for n in _NUMBERING_COUNTERS)])
+    return number, level
 
 
-def _numbered(text: str, level: int = 0, num_id: int = 2) -> str:
-    """Numbered list item (1., 2., 3. ...).
+def _numbered_item(number: str, text: str, level: int = 0) -> str:
+    """One numbered paragraph: the literal `number`, a tab, then `text`.
 
-    `num_id` selects which <w:num> instance to reference. Pass a freshly
-    allocated ID via `_allocate_numbered_list_id()` to restart numbering from
-    1 for this list. The default (2) keeps backward compatibility for any
-    direct caller — but new code should go through `_render_list` so that
-    each independent list gets its own restart.
+    The number sits in the hanging indent, so wrapped lines align under the
+    text and not under the number — the shape Word gives a real list, without
+    depending on Word's list counters.
     """
-    safe = _xml_escape(text)
+    left = _LIST_NUMBER_INDENT + max(0, level) * _LIST_LEVEL_STEP
     return (
         '<w:p>'
-        f'<w:pPr><w:pStyle w:val="ListBullet"/>'
-        f'<w:numPr><w:ilvl w:val="{level}"/><w:numId w:val="{num_id}"/></w:numPr>'
+        '<w:pPr><w:pStyle w:val="ListNumber"/>'
+        f'<w:tabs><w:tab w:val="left" w:pos="{left}"/></w:tabs>'
+        f'<w:ind w:left="{left}" w:hanging="{_LIST_NUMBER_INDENT}"/>'
         '</w:pPr>'
-        f'<w:r><w:t xml:space="preserve">{safe}</w:t></w:r>'
+        '<w:r><w:rPr><w:b/><w:bCs/></w:rPr>'
+        f'<w:t xml:space="preserve">{_xml_escape(number)}</w:t></w:r>'
+        '<w:r><w:tab/></w:r>'
+        f'<w:r><w:t xml:space="preserve">{_xml_escape(text)}</w:t></w:r>'
         '</w:p>'
     )
 
@@ -413,28 +451,22 @@ def _numbered(text: str, level: int = 0, num_id: int = 2) -> str:
 def _render_list(items: List[Any], numbered: bool = False) -> List[str]:
     """Render a list of items (strings or dicts) as bullets or numbered points.
 
-    If `numbered=True`, items are rendered as 1., 2., 3. — and the list gets a
-    freshly allocated numId so numbering restarts at 1 (independently of any
-    other numbered list in the document). A dict item with
-    `{"text": "...", "level": N}` allows nesting; nested items share the same
-    numId so sublevel numbering (a, b, c / i, ii, iii) is consistent.
+    With `numbered=True` every item gets a literal number derived from the
+    nearest numbered heading: under "4.2 …" the items read 4.2.1, 4.2.2 …, and
+    a dict item `{"text": "...", "level": 1}` nests as 4.2.2.1. Bullets stay a
+    Word bullet list; a dict item's `level` only indents it.
     """
     out: List[str] = []
-    if not items:
-        return out
-    if numbered:
-        num_id = _allocate_numbered_list_id()
-        for item in items:
-            if isinstance(item, dict):
-                out.append(_numbered(item.get("text", ""), level=item.get("level", 0), num_id=num_id))
-            else:
-                out.append(_numbered(str(item), num_id=num_id))
-    else:
-        for item in items:
-            if isinstance(item, dict):
-                out.append(_bullet(item.get("text", ""), level=item.get("level", 0)))
-            else:
-                out.append(_bullet(str(item)))
+    for item in items or []:
+        if isinstance(item, dict):
+            text, level = str(item.get("text", "")), int(item.get("level", 0) or 0)
+        else:
+            text, level = str(item), 0
+        if numbered:
+            number, level = _next_number(level)
+            out.append(_numbered_item(number, text, level))
+        else:
+            out.append(_bullet(text, level=level))
     return out
 
 
@@ -795,23 +827,19 @@ _NUMBERING_XML_HEADER = f'''<?xml version="1.0" encoding="UTF-8" standalone="yes
 
 _NUMBERING_XML_FOOTER = '''  <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
   <w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>
-{extra_nums}</w:numbering>
+</w:numbering>
 '''
 
 
 def _numbering_xml() -> str:
-    """Render numbering.xml with one <w:num> per allocated numbered-list ID.
+    """Render numbering.xml.
 
-    The two reserved IDs (numId=1 → bullets, numId=2 → legacy decimal) are
-    always present. Every list registered through `_allocate_numbered_list_id`
-    gets its own <w:num> referencing the same decimal abstractNum, so each
-    list keeps an independent counter and visibly restarts at 1.
+    The document only references the bullet instance (numId=1). Numbered items
+    carry literal section-based numbers (see `_numbered_item`), so no per-list
+    <w:num> instances are emitted any more; the decimal definition (numId=2)
+    stays so the numbering part keeps its two-instance shape.
     """
-    extra_nums = "".join(
-        f'  <w:num w:numId="{nid}"><w:abstractNumId w:val="1"/></w:num>\n'
-        for nid in _NUMBERED_LIST_INSTANCES
-    )
-    return _NUMBERING_XML_HEADER + _NUMBERING_XML_FOOTER.format(extra_nums=extra_nums)
+    return _NUMBERING_XML_HEADER + _NUMBERING_XML_FOOTER
 
 
 def _styles_xml() -> str:
@@ -879,6 +907,11 @@ def _styles_xml() -> str:
     <w:name w:val="List Bullet"/>
     <w:basedOn w:val="Normal"/>
     <w:pPr><w:spacing w:after="80"/><w:ind w:left="720" w:hanging="360"/></w:pPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="ListNumber">
+    <w:name w:val="List Number"/>
+    <w:basedOn w:val="Normal"/>
+    <w:pPr><w:spacing w:after="80"/><w:ind w:left="851" w:hanging="851"/></w:pPr>
   </w:style>
   <w:style w:type="paragraph" w:styleId="Quote">
     <w:name w:val="Quote"/>
@@ -1335,6 +1368,12 @@ def _build_uvod(s: Dict[str, Any]) -> str:
                          space_after=240))
     if s.get("text"):
         out.append(_body_para(s["text"]))
+    if s.get("zoznam"):
+        # Numbered points right after the intro — typically the open questions a
+        # reader wants to see first. Items read 1.1, 1.2 …; a nested
+        # {"text", "level": 1} item reads 1.1.1, so a question can be quoted by
+        # number anywhere else in the document.
+        out.extend(_render_list(s["zoznam"], numbered=True))
     return "".join(out)
 
 
@@ -1402,11 +1441,15 @@ def _build_popis(s: Dict[str, Any]) -> str:
             out.append(_heading("Príklady použitia", level=3))
             out.extend(_render_list(mod["priklady"], numbered=False))
 
+    # Sitemap and user flows continue the module numbering (4.N+1, 4.N+2) so
+    # their items get their own context instead of inheriting the last module's.
+    next_idx = len(s.get("moduly", []) or []) + 1
     if s.get("sitemap"):
-        out.append(_heading("Sitemap", level=2))
+        out.append(_heading(f"4.{next_idx} Sitemap", level=2))
         out.extend(_render_list(s["sitemap"], numbered=True))
+        next_idx += 1
     if s.get("user_flows"):
-        out.append(_heading("User flows", level=2))
+        out.append(_heading(f"4.{next_idx} User flows", level=2))
         out.extend(_render_list(s["user_flows"], numbered=True))
     return "".join(out)
 
@@ -1423,7 +1466,8 @@ def _build_roly(roly: List[Dict[str, Any]]) -> str:
 def _build_technicke(s: Dict[str, Any]) -> str:
     out = [_section_title("6", "Technické riešenie")]
     plat = s.get("platforma", {})
-    out.append(_heading("Platforma a technológie", level=2))
+    sub = 1
+    out.append(_heading(f"6.{sub} Platforma a technológie", level=2))
     rows = [["Vrstva", "Technológia"]]
     for label, key in (
         ("Backend", "backend"), ("Frontend", "frontend"), ("Databáza", "databaza"),
@@ -1438,7 +1482,8 @@ def _build_technicke(s: Dict[str, Any]) -> str:
         out.append(_para(plat["zdovodnenie"]))
 
     if s.get("integracie"):
-        out.append(_heading("Integrácie s externými systémami", level=2))
+        sub += 1
+        out.append(_heading(f"6.{sub} Integrácie s externými systémami", level=2))
         rows = [["Systém", "Účel", "Smer dát", "Poznámka"]]
         for i in s["integracie"]:
             rows.append([
@@ -1448,7 +1493,8 @@ def _build_technicke(s: Dict[str, Any]) -> str:
         out.append(_table(rows, col_widths=[2200, 2700, 1700, 2400]))
 
     if s.get("bezpecnost"):
-        out.append(_heading("Bezpečnosť", level=2))
+        sub += 1
+        out.append(_heading(f"6.{sub} Bezpečnosť", level=2))
         out.extend(_bullet(x) for x in s["bezpecnost"])
     return "".join(out)
 
@@ -1525,15 +1571,15 @@ def _build_podmienky(s: Dict[str, Any]) -> str:
     if s.get("lede"):
         out.append(_para(s["lede"], italic=True, color=WAME_MUTED, size=11,
                          space_after=240))
-    out.append(_heading("WAME sa zaväzuje", level=2))
+    out.append(_heading("11.1 WAME sa zaväzuje", level=2))
     out.extend(_bullet(x) for x in s.get("wame_zavazky", []))
-    out.append(_heading("Klient sa zaväzuje", level=2))
+    out.append(_heading("11.2 Klient sa zaväzuje", level=2))
     out.extend(_bullet(x) for x in s.get("klient_zavazky", []))
     if s.get("zmeny_scope"):
-        out.append(_heading("Zmeny rozsahu", level=2))
+        out.append(_heading("11.3 Zmeny rozsahu", level=2))
         out.append(_para(s["zmeny_scope"]))
     else:
-        out.append(_heading("Zmeny rozsahu", level=2))
+        out.append(_heading("11.3 Zmeny rozsahu", level=2))
         out.append(_para(
             "Akékoľvek zmeny nad rámec tohto DNR sa riešia formou písomného "
             "dodatku — zahŕňa aj odhad pracnosti a aktualizovaný harmonogram."
@@ -1723,6 +1769,8 @@ def _estimate_section_units(plan: Dict[str, Any], section_id: str) -> int:
         return units
     if "text" in s:
         units += len((s.get("text") or "").split()) // 12 + 4
+    if s.get("zoznam"):
+        units += len(s["zoznam"])
     for key in ("biznis", "technicke", "out_of_scope", "co_zostava",
                 "osobne_udaje", "bezpecnost", "wame_zavazky", "klient_zavazky"):
         if s.get(key):
@@ -1812,7 +1860,7 @@ def build_document_xml(plan: Dict[str, Any]) -> str:
 
 def write_docx(plan: Dict[str, Any], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    _reset_numbered_lists()
+    _reset_numbering()
     document_xml = build_document_xml(plan)
     meta = plan.get("meta", {})
     image_rels = [(img["rel_id"], f"media/{img['media_name']}") for img in _IMAGE_REGISTRY]

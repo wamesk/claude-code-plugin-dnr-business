@@ -43,11 +43,21 @@ Akceptované formy:
 
 ### Step 1 — Nájdi orchestrátorský skript
 
+Zdroj pravdy je **základný adresár skillu**, ktorý Skill tool vypísal pri načítaní
+(„Base directory for this skill: …"). Skript je v ňom pod `scripts/`. Dosaď ho za
+`SKILL_DIR`:
+
 ```bash
-SCRIPT=$(find ~/.claude/plugins -path "*/dnr-business/skills/*/scripts/dnr_to_docx.py" -print -quit 2>/dev/null | head -1)
-if [ -z "$SCRIPT" ]; then
-    # Claude.ai cloud fallback: skript je vedľa SKILL.md
-    SCRIPT="$(dirname "$0")/scripts/dnr_to_docx.py"
+SKILL_DIR="<Base directory for this skill>"
+SCRIPT="$SKILL_DIR/scripts/dnr_to_docx.py"
+if [ ! -f "$SCRIPT" ]; then
+    # Najnovšia nainštalovaná verzia v cache pluginov
+    SCRIPT=$(ls ~/.claude/plugins/cache/*/dnr-business/*/skills/dnr-business/scripts/dnr_to_docx.py 2>/dev/null | sort -V | tail -1)
+fi
+if [ -z "$SCRIPT" ] || [ ! -f "$SCRIPT" ]; then
+    # Posledná možnosť — find vie zdvihnúť aj zastaranú kópiu, ktorú si zosynchronizovala
+    # desktopová aplikácia (napr. 1.2.1 vedľa nainštalovanej 1.4.0), preto je až tu
+    SCRIPT=$(find ~/.claude/plugins -path "*/dnr-business/skills/*/scripts/dnr_to_docx.py" -print -quit 2>/dev/null | head -1)
 fi
 test -f "$SCRIPT" || { echo "dnr-business plugin nie je správne nainštalovaný"; exit 1; }
 PROMPT_DIR="$(dirname "$SCRIPT")/../prompts"
@@ -441,10 +451,27 @@ Vytvoríš cez `/dnr-business --init`. Kľúčové polia:
 - Diakritiku zachovávaj — žiadne ASCII náhrady.
 - `verzia` začína `v1.0`, pri zásadnej revízii bump na `v1.1` / `v2.0`.
 
-## Číslované vs. odrážkové zoznamy
+## Číslovanie bodov a odrážkové zoznamy
 
-Skript automaticky **čísluje** (1., 2., 3.) tieto zoznamy:
+Číslované body sú **hierarchické podľa sekcie**: číslo bodu je číslo najbližšieho
+číslovaného nadpisu plus poradie. Ciele pod `3.1 Biznis ciele` sú `3.1.1`, `3.1.2`…,
+funkcie modulu `4.2` sú `4.2.1`, `4.2.2`…, výstupy fázy `9.1` sú `9.1.1`… Vnorená
+položka `{"text": "...", "level": 1}` dostane ďalšiu úroveň (`4.2.2.1`). Každé číslo
+je v dokumente unikátne, takže sa dá citovať („otázka 1.2.3") — v moduloch, fázach aj
+rizikách sa na body odkazuj týmto číslom a do textu položky nikdy nepíš vlastné
+poradové číslo ani písmeno skupiny.
 
+Čísla sú zapísané ako text, nie ako Wordovský zoznam. Word nereštartuje `<w:num>`
+inštanciu, ktorá zdieľa abstractNum s predchádzajúcou (chýbal by jej
+`<w:startOverride>`), takže per-list inštancie z verzie 1.1.2 sa vo Worde zobrazili
+ako jeden súvislý zoznam 1…N; LibreOffice ich reštartoval, preto to pri kontrole
+vyzeralo správne. Literálne čísla tú závislosť rušia.
+
+Číslované zoznamy:
+
+- `uvod.zoznam` — voliteľný, hneď za úvodným textom; typicky otvorené otázky, ktoré
+  chce čitateľ vidieť ako prvé. Skupina = položka `level 0` (`1.1`), otázka = položka
+  `level 1` (`1.1.1`).
 - `ciele.biznis`, `ciele.technicke`, `ciele.out_of_scope`
 - `popis_riesenia.moduly[].funkcie`, `sitemap`, `user_flows`
 - `fazy[].vystupy`
@@ -459,14 +486,6 @@ Tieto zoznamy sú **odrážkové** (●):
 
 Heuristika: **enumerable kroky/výstupy** (kde poradie alebo počet má váhu)
 sú číslované, **kvalitatívne popisy** sú s odrážkami.
-
-**Každý číslovaný zoznam štartuje od 1.** Od verzie 1.1.2 nepokračujú čísla
-naprieč zoznamami: napr. `funkcie` modulu 2 začínajú znova od 1., nie od
-počtu položiek modulu 1. Pod kapotou skript alokuje samostatnú `<w:num>`
-inštanciu (zdieľa rovnaký abstract numFormat) pre každý logický zoznam, takže
-Word udržiava nezávislé počítadlo per-list. Pre sub-položky (nested
-`{"text": "...", "level": 1}` v rámci toho istého zoznamu) sa použije `a)`,
-`b)`, `c)` — ide o pokračujúce číslovanie v rámci toho istého zoznamu.
 
 ## Súvisiace skilly
 
