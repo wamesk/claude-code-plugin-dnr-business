@@ -23,6 +23,8 @@ Výstup je hotový dokument pripravený na revíziu — všetky neznáme údaje 
 /plugin install dnr-business@wame
 ```
 
+Plugin vyžaduje plugin `work-rules` (skill `wame-estimate` — metodika odhadov `wame-estimate-v3`); je deklarovaný v `dependencies`, takže sa nainštaluje spolu s ním. Ak chýba: `/plugin install work-rules@wame`.
+
 ### Claude.ai (online)
 
 1. Stiahni priečinok `skills/dnr-business/` z tohto repa.
